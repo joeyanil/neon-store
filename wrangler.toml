@@ -1,4 +1,4 @@
-name = "neon-p2p-miniapp"
+name = "neon-store"
 main = "src/worker.js"
 compatibility_date = "2026-01-15"
 
