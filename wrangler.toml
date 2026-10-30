@@ -1,0 +1,40 @@
+name = "neon-p2p-miniapp"
+main = "src/worker.js"
+compatibility_date = "2026-01-15"
+
+# Static files (the Mini App) are served for free. Only /api and /telegram run the Worker.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/telegram/*", "/health"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "neon-p2p"
+# No database_id: Cloudflare creates the database on the first deploy and remembers it.
+migrations_dir = "migrations"
+
+# Private storage for the receipts customers send. Create it once:  npx wrangler r2 bucket create neon-proofs
+# There is no public URL; the Worker streams a file only to the customer who sent it and to admins.
+[[r2_buckets]]
+binding = "PROOFS"
+bucket_name = "neon-proofs"
+
+# Every 5 minutes: expire unpaid orders, re-send alerts that did not reach anyone, delete old proofs.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+# Optional. The Worker works out its own address; only set this if you attach a custom domain (https, no trailing slash).
+# WEBAPP_URL = "https://shop.example.com"
+# Telegram numeric ids of the OWNERS (comma separated). Owners can do everything. They can add staff inside the app.
+ADMIN_IDS = "5356910725"
+# Optional. Normally leave this out: alerts go to each admin privately, or to a group after an owner sends /alerts there.
+# ADMIN_CHAT_ID = "-100123456789"
+# Public support username shown in the app, without @.
+SUPPORT_USERNAME = "Neon_ghost147"
+AUTH_MAX_AGE_SEC = "86400"
+
+# Secrets (never put these in this file). Set them once with:
+#   wrangler secret put BOT_TOKEN
+#   wrangler secret put WEBHOOK_SECRET

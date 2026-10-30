@@ -1,0 +1,351 @@
+// Business flows that touch both the database and Telegram: proof submission, admin actions,
+// alerts and customer notifications, expiry, and the bot's webhook.
+import { adminSummary, allAdminIds, audit, getRole } from './admin.js';
+import { ApiError } from './http.js';
+import { adminCard, adminKeyboard, copy } from './messages.js';
+import { formatEtb, formatUsdt, parseRate, parseUsdt } from './money.js';
+import {
+  LATE_PROOF_SEC, findExpired, getEvents, getOrderRow, getSettings, logEvent, nowSec, orderView, patchOrder, setPaused, setRates, setSetting, transition,
+} from './orders.js';
+import { alertTargets, appButton, baseUrl, getUser, orderUrl } from './notify.js';
+import { addProofRow, discardImage, duplicateWarnings, listProofs, storeImage } from './proofs.js';
+import { TelegramError, esc } from './telegram.js';
+import { handleChatCallback, handleChatCommand, handleChatInput } from './chat.js';
+import { adminClose, adminReply, getTicket } from './tickets.js';
+import { cleanNote } from './validate.js';
+
+// ---------- small helpers ----------
+
+/** The order as the customer's own app sees it: history and the proofs they sent. */
+export async function customerOrderView(db, row) {
+  const [events, proofs] = await Promise.all([getEvents(db, row.id), listProofs(db, row.id)]);
+  return orderView(row, events, proofs);
+}
+
+// ---------- notifications to customers (best effort: a failed message never fails the action) ----------
+
+export async function notifyUser(env, tg, userId, kind, order, ref) {
+  try {
+    const user = await getUser(env.DB, userId);
+    const c = copy(user?.language);
+    const text = kind === 'reference' ? c.reference(order, ref) : c[kind](order, ref);
+    await tg.sendMessage(userId, esc(text), {
+      reply_markup: { inline_keyboard: [[{ text: c.open_order, web_app: { url: orderUrl(env, order.id) } }]] },
+    });
+  } catch (err) {
+    if (err instanceof TelegramError && (err.status === 403 || err.status === 400)) {
+      await env.DB.prepare('UPDATE users SET can_dm = 0 WHERE id = ?').bind(userId).run().catch(() => {});
+    }
+    console.warn('notifyUser failed', userId, kind, String(err?.message || err));
+  }
+}
+
+// ---------- alerts to admins ----------
+
+const openButton = (env, tg, settings, chatId, orderId) => appButton(env, tg, settings, chatId, '🔎 Review in app', `a=${encodeURIComponent(orderId)}`, `a_${orderId}`);
+
+/** Sends the alert (text only: proofs stay private in the app). Returns how many admins were reached. */
+export async function alertAdmins(env, tg, orderId) {
+  const db = env.DB;
+  const row = await getOrderRow(db, orderId);
+  if (!row) return 0;
+  const [user, settings, dups] = await Promise.all([getUser(db, row.user_id), getSettings(db), duplicateWarnings(db, orderId)]);
+  const targets = await alertTargets(env, settings);
+  const text = adminCard(row, user, { duplicates: dups.map((d) => d.order_id).join(', ') });
+  let reached = 0;
+  for (const chat of targets) {
+    try {
+      const open = await openButton(env, tg, settings, chat, orderId);
+      const sent = await tg.sendMessage(chat, text, { reply_markup: adminKeyboard(row, open) });
+      await db.prepare('INSERT INTO admin_notices (order_id, chat_id, message_id, created_at) VALUES (?, ?, ?, ?)').bind(orderId, chat, sent.message_id, nowSec()).run();
+      reached++;
+    } catch (err) {
+      console.warn('alert failed', chat, String(err?.message || err));
+    }
+  }
+  if (reached && !row.alerted_at) await patchOrder(db, orderId, { alerted_at: nowSec() });
+  return reached;
+}
+
+/** Brings every copy of the alert up to date, wherever the action happened (chat button or app). */
+export async function refreshAdminCards(env, tg, orderId) {
+  const db = env.DB;
+  const row = await getOrderRow(db, orderId);
+  if (!row) return;
+  const [user, settings, dups] = await Promise.all([getUser(db, row.user_id), getSettings(db), duplicateWarnings(db, orderId)]);
+  const { results: notices } = await db.prepare('SELECT id, chat_id, message_id FROM admin_notices WHERE order_id = ?').bind(orderId).all();
+  const text = adminCard(row, user, { duplicates: dups.map((d) => d.order_id).join(', ') });
+  for (const n of notices) {
+    try {
+      const open = await openButton(env, tg, settings, n.chat_id, orderId);
+      await tg.editMessageText(n.chat_id, n.message_id, text, adminKeyboard(row, open));
+    } catch (err) {
+      const gone = err instanceof TelegramError && /not found|can't be edited|deleted/i.test(err.description || '');
+      if (gone) await db.prepare('DELETE FROM admin_notices WHERE id = ?').bind(n.id).run().catch(() => {});
+      else if (!(err instanceof TelegramError && /not modified/i.test(err.description || ''))) console.warn('card refresh failed', String(err?.message || err));
+    }
+  }
+}
+
+// ---------- customer submits proof ----------
+
+const MAX_EVIDENCE = 5;
+
+export async function submitEvidence(env, tg, userId, orderId, { text, photo }) {
+  const db = env.DB;
+  const row = await getOrderRow(db, orderId);
+  if (!row || row.user_id !== userId) throw new ApiError(404, 'not_found', 'Order not found.');
+  const now = nowSec();
+
+  let late = false;
+  if (row.status === 'expired') {
+    if (now > row.expires_at + LATE_PROOF_SEC) throw new ApiError(409, 'expired', 'This order expired more than a day ago. Open Support and mention the order number.');
+    late = true;
+  } else if (row.status === 'awaiting_payment') {
+    late = now >= row.expires_at; // paid just after the window closed: accept it, but mark it for the admin
+  } else if (row.status !== 'evidence_submitted') {
+    throw new ApiError(409, 'not_open', 'This order is no longer waiting for payment details.');
+  }
+  if (row.evidence_count >= MAX_EVIDENCE) throw new ApiError(429, 'too_many_evidence', 'You have reached the limit for this order. Contact Support.');
+
+  const note = cleanNote(text);
+  const hasPhoto = Boolean(photo) && typeof photo.arrayBuffer === 'function' && photo.size > 0;
+  if (!note && !hasPhoto) throw new ApiError(400, 'no_evidence', row.side === 'buy' ? 'Attach your payment receipt.' : 'Add the transaction ID or a screenshot.');
+
+  const image = hasPhoto ? await storeImage(env, orderId, photo) : null; // validates the real file type and size
+  let proofId;
+  try {
+    proofId = await addProofRow(db, { orderId, userId, image, refText: note, now });
+    const set = { evidence_count: row.evidence_count + 1 };
+    if (note) set.evidence_text = note;
+    if (late) set.late = 1;
+
+    if (row.status === 'evidence_submitted') {
+      await patchOrder(db, orderId, set);
+      await logEvent(db, orderId, 'evidence_submitted', `user:${userId}`, 'additional evidence');
+    } else {
+      if (row.status === 'awaiting_payment' && late) {
+        await transition(db, orderId, 'awaiting_payment', 'expired', 'system', { now });
+        await transition(db, orderId, 'expired', 'evidence_submitted', `user:${userId}`, { set, note: 'late proof', now });
+      } else if (row.status === 'expired') {
+        const res = await transition(db, orderId, 'expired', 'evidence_submitted', `user:${userId}`, { set, note: 'late proof', now });
+        if (!res.ok) throw new ApiError(409, 'not_open', 'This order changed while you were sending. Refresh and check its status.');
+      } else {
+        const res = await transition(db, orderId, 'awaiting_payment', 'evidence_submitted', `user:${userId}`, { set, now });
+        if (!res.ok) throw new ApiError(409, 'not_open', 'This order changed while you were sending. Refresh and check its status.');
+      }
+    }
+  } catch (err) {
+    if (proofId) await db.prepare('DELETE FROM order_proofs WHERE id = ?').bind(proofId).run().catch(() => {});
+    if (image) await discardImage(env, image.r2_key);
+    throw err;
+  }
+
+  // The proof is safe in storage and the order is in the admin queue. Telling the admins is best effort: the cron retries.
+  await alertAdmins(env, tg, orderId).catch((err) => console.warn('alertAdmins failed', String(err?.message || err)));
+  const fresh = await getOrderRow(db, orderId);
+  return customerOrderView(db, fresh);
+}
+
+// ---------- customer cancels ----------
+
+export async function cancelOrder(env, userId, orderId) {
+  const row = await getOrderRow(env.DB, orderId);
+  if (!row || row.user_id !== userId) throw new ApiError(404, 'not_found', 'Order not found.');
+  const res = await transition(env.DB, orderId, 'awaiting_payment', 'cancelled', `user:${userId}`);
+  if (!res.ok) throw new ApiError(409, 'not_cancellable', 'This order can no longer be cancelled because payment details were already sent.');
+  return customerOrderView(env.DB, await getOrderRow(env.DB, orderId));
+}
+
+// ---------- scheduled jobs ----------
+
+export async function expireStaleOrders(env, tg, now = nowSec()) {
+  const stale = await findExpired(env.DB, now);
+  let n = 0;
+  for (const { id, user_id: userId } of stale) {
+    const res = await transition(env.DB, id, 'awaiting_payment', 'expired', 'system', { now });
+    if (!res.ok) continue;
+    n++;
+    const row = await getOrderRow(env.DB, id);
+    await notifyUser(env, tg, userId, 'expired', row);
+  }
+  return n;
+}
+
+/** Orders whose alert never reached anyone (Telegram down, admin had not started the bot) are tried again. */
+export async function retryAlerts(env, tg, limit = 20) {
+  const { results } = await env.DB
+    .prepare("SELECT id FROM orders WHERE status = 'evidence_submitted' AND alerted_at IS NULL ORDER BY updated_at LIMIT ?")
+    .bind(limit)
+    .all();
+  let n = 0;
+  for (const { id } of results) if (await alertAdmins(env, tg, id).catch(() => 0)) n++;
+  return n;
+}
+
+// ---------- admin actions (chat buttons and the app share this) ----------
+
+export const REJECT_REASONS = ['not_received', 'amount_mismatch', 'unreadable', 'other'];
+
+const ACTIONS = {
+  confirm: { from: ['evidence_submitted'], to: 'processing', notify: 'processing', done: 'Payment confirmed' },
+  release: { from: ['processing'], to: 'completed', notify: 'completed', done: 'Marked as released' },
+  reject: { from: ['awaiting_payment', 'evidence_submitted', 'processing', 'expired'], to: 'rejected', notify: 'rejected', done: 'Order rejected' },
+};
+
+/**
+ * @param {'confirm' | 'release' | 'reject'} action
+ * @returns {Promise<{ok: boolean, order: object, message: string}>}  ok=false means the order had already moved on.
+ */
+export async function adminAct(env, tg, actorId, orderId, action, { reference, reason } = {}) {
+  const spec = ACTIONS[action];
+  const before = await getOrderRow(env.DB, orderId);
+  if (!before) throw new ApiError(404, 'not_found', 'Order not found.');
+
+  const set = {};
+  let note;
+  if (action === 'release' && reference) set.completion_ref = cleanNote(reference, 200);
+  if (action === 'reject') {
+    if (reason && !REJECT_REASONS.includes(reason)) throw new ApiError(400, 'invalid_field', 'Choose a reason from the list.', { field: 'reason' });
+    if (reason) { set.reject_reason = reason; note = reason; }
+  }
+  const res = await transition(env.DB, orderId, spec.from, spec.to, `admin:${actorId}`, { set, note });
+  const row = await getOrderRow(env.DB, orderId);
+  await refreshAdminCards(env, tg, orderId).catch(() => {});
+  if (!res.ok) return { ok: false, order: row, message: `Not applied: order is already ${row.status.replace('_', ' ')}.` };
+  await notifyUser(env, tg, row.user_id, spec.notify, row, set.completion_ref);
+  return { ok: true, order: row, message: spec.done };
+}
+
+async function handleCallback(env, tg, cb) {
+  if (await handleChatCallback(env, tg, cb)) return;
+  const answer = (text, alert = false) => tg.answerCallbackQuery(cb.id, text, alert).catch(() => {});
+  if (!(await getRole(env, cb.from.id))) return answer('Admins only.', true);
+  const tk = /^t:(TK-[2-9A-HJKMNP-Z]{6}):x$/.exec(cb.data || '');
+  if (tk) {
+    try {
+      await adminClose(env, tg, cb.from.id, tk[1]);
+      return answer('Ticket closed');
+    } catch (err) {
+      if (err instanceof ApiError) return answer(err.message, true);
+      throw err;
+    }
+  }
+  const m = /^o:(NG-[2-9A-HJKMNP-Z]{6}):([cdr])$/.exec(cb.data || '');
+  if (!m) return answer('Unknown action.');
+  const [, orderId, code] = m;
+  const action = { c: 'confirm', d: 'release', r: 'reject' }[code];
+  try {
+    const res = await adminAct(env, tg, cb.from.id, orderId, action);
+    return answer(res.message, !res.ok);
+  } catch (err) {
+    if (err instanceof ApiError) return answer(err.message, true);
+    throw err;
+  }
+}
+
+// ---------- the bot's own messages ----------
+
+async function handleMessage(env, tg, msg) {
+  const from = msg.from;
+  if (!from || from.is_bot) return;
+  const text = (msg.text || '').trim();
+  const role = await getRole(env, from.id);
+
+  // An admin replying to an order alert with a reference sends that reference to the customer.
+  if (role && msg.reply_to_message && text && !text.startsWith('/')) {
+    const source = msg.reply_to_message.text || msg.reply_to_message.caption || '';
+    const tid = /TK-[2-9A-HJKMNP-Z]{6}/.exec(source)?.[0];
+    if (tid) {
+      const reply = (t) => tg.sendMessage(msg.chat.id, t, { reply_parameters: { message_id: msg.message_id } });
+      if (!(await getTicket(env.DB, tid))) return reply('Ticket not found.');
+      await adminReply(env, tg, from.id, tid, text);
+      return reply('Sent to the customer ✓');
+    }
+    const id = /NG-[2-9A-HJKMNP-Z]{6}/.exec(source)?.[0];
+    if (id) return handleReference(env, tg, msg, id, text);
+  }
+
+  if (!text.startsWith('/') && (await handleChatInput(env, tg, msg))) return;
+  if (!text.startsWith('/')) return;
+  const [rawCmd, ...args] = text.split(/\s+/);
+  const cmd = rawCmd.split('@')[0].toLowerCase();
+
+  if (await handleChatCommand(env, tg, msg, cmd)) return;
+
+  if (role !== 'owner') return; // the commands below change the shop's settings
+
+  if (cmd === '/alerts') {
+    const here = msg.chat.type === 'private' ? 0 : msg.chat.id;
+    await setSetting(env.DB, 'admin_chat_id', here);
+    await setSetting(env.DB, 'alerts_tested', 1);
+    await audit(env.DB, from.id, 'alerts.destination', here ? `chat ${here}` : 'private messages');
+    return tg.sendMessage(msg.chat.id, here ? 'Order alerts will now be sent in this chat. Make sure only people you trust are in it.' : 'Order alerts will now be sent to each admin as a private message.');
+  }
+  if (cmd === '/setrate') {
+    const buy = parseRate(args[0]);
+    const sell = parseRate(args[1]);
+    if (!buy || !sell) return tg.sendMessage(msg.chat.id, 'Usage: <code>/setrate BUY SELL</code>\nExample: <code>/setrate 168.50 163</code>\nBUY is what a customer pays per USDT. SELL is what a customer receives per USDT.');
+    if (sell > buy) return tg.sendMessage(msg.chat.id, 'The sell rate cannot be higher than the buy rate. Nothing was changed.');
+    await setRates(env.DB, buy, sell);
+    await audit(env.DB, from.id, 'settings.update', `rates ${formatEtb(buy)}/${formatEtb(sell)} (chat)`);
+    return tg.sendMessage(msg.chat.id, `Rates updated.\nCustomers <b>buy</b> at ${formatEtb(buy)} ETB and <b>sell</b> at ${formatEtb(sell)} ETB per USDT.`);
+  }
+  if (cmd === '/ttl') {
+    const minutes = Number(args[0]);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return tg.sendMessage(msg.chat.id, 'Usage: <code>/ttl MINUTES</code> (1 to 1440). This is how long a customer has to pay or send USDT.');
+    await setSetting(env.DB, 'order_ttl_min', minutes);
+    return tg.sendMessage(msg.chat.id, `Customers now have ${minutes} minutes to pay. Orders already open keep their old deadline.`);
+  }
+  if (cmd === '/limits') {
+    const min = parseUsdt(args[0]);
+    const max = parseUsdt(args[1]);
+    if (!min || !max || min >= max) return tg.sendMessage(msg.chat.id, 'Usage: <code>/limits MIN MAX</code> in USDT. Example: <code>/limits 10 5000</code>');
+    await setSetting(env.DB, 'min_usdt_micro', min);
+    await setSetting(env.DB, 'max_usdt_micro', max);
+    return tg.sendMessage(msg.chat.id, `Order size is now ${formatUsdt(min)} to ${formatUsdt(max)} USDT.`);
+  }
+  if (cmd === '/rates') {
+    const s = await getSettings(env.DB);
+    if (!s.buy_rate_cents) return tg.sendMessage(msg.chat.id, 'Rates are not set. Use <code>/setrate BUY SELL</code>.');
+    return tg.sendMessage(msg.chat.id, `Buy ${formatEtb(s.buy_rate_cents)} · Sell ${formatEtb(s.sell_rate_cents)} ETB per USDT${s.paused ? '\n<b>Trading is paused.</b>' : ''}`);
+  }
+  if (cmd === '/pause' || cmd === '/resume') {
+    await setPaused(env.DB, cmd === '/pause');
+    return tg.sendMessage(msg.chat.id, cmd === '/pause' ? 'Trading paused. Customers cannot create new orders.' : 'Trading resumed.');
+  }
+  if (cmd === '/orders') {
+    const sum = await adminSummary(env.DB);
+    const { results } = await env.DB
+      .prepare("SELECT id, side, status FROM orders WHERE status IN ('awaiting_payment','evidence_submitted','processing') ORDER BY created_at DESC LIMIT 15")
+      .all();
+    if (!results.length) return tg.sendMessage(msg.chat.id, 'No open orders.');
+    const lines = results.map((o) => `${o.side === 'buy' ? '🟢' : '🔴'} <code>${o.id}</code> · ${o.status.replace('_', ' ')}`);
+    return tg.sendMessage(msg.chat.id, `<b>Open orders</b> (${sum.counts.review} to review, ${sum.counts.release} to release)\n${lines.join('\n')}`);
+  }
+}
+
+async function handleReference(env, tg, msg, orderId, text) {
+  const row = await getOrderRow(env.DB, orderId);
+  const reply = (t) => tg.sendMessage(msg.chat.id, t, { reply_parameters: { message_id: msg.message_id } });
+  if (!row) return reply('Order not found.');
+  if (row.status !== 'processing' && row.status !== 'completed') return reply('Confirm the payment first, then send the reference.');
+  const ref = cleanNote(text, 200);
+  if (!ref) return;
+  await patchOrder(env.DB, orderId, { completion_ref: ref });
+  await logEvent(env.DB, orderId, row.status, `admin:${msg.from.id}`, 'reference sent to customer');
+  await notifyUser(env, tg, row.user_id, 'reference', row, ref);
+  return reply('Reference sent to the customer ✓');
+}
+
+/** Entry point for Telegram webhook updates. Never throws, so Telegram does not retry in a loop. */
+export async function handleUpdate(env, tg, update) {
+  try {
+    if (update.callback_query) await handleCallback(env, tg, update.callback_query);
+    else if (update.message) await handleMessage(env, tg, update.message);
+  } catch (err) {
+    console.error('update failed', update.update_id, String(err?.stack || err));
+  }
+}
+
+

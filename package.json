@@ -1,0 +1,25 @@
+{
+  "name": "neon-p2p-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram Mini App for Neon Store: buy and sell USDT with manual admin confirmation",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "ship": "wrangler deploy && wrangler d1 migrations apply neon-p2p --remote",
+    "db:local": "wrangler d1 migrations apply neon-p2p --local",
+    "db:remote": "wrangler d1 migrations apply neon-p2p --remote",
+    "test": "node --test test/unit.test.js",
+    "test:integration": "node test/integration.mjs",
+    "test:ui": "node test/ui.test.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/figtree": "^5.0.0",
+    "@fontsource/noto-sans-ethiopic": "^5.0.0",
+    "@fontsource/sora": "^5.0.0",
+    "jsdom": "^26.0.0",
+    "wrangler": "^4.0.0",
+    "playwright": "^1.50.0"
+  }
+}
