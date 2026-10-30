@@ -52,6 +52,16 @@ export class Telegram {
     return this._send('sendPhoto', { body: form });
   }
 
+  /** Sends a file silently. @param {Blob} blob */
+  sendDocument(chatId, blob, filename, caption) {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('document', blob, filename);
+    form.append('caption', caption);
+    form.append('disable_notification', 'true');
+    return this._send('sendDocument', { body: form });
+  }
+
   editMessageText(chatId, messageId, text, replyMarkup) {
     return this.call('editMessageText', {
       chat_id: chatId,

@@ -5,7 +5,7 @@ Buy and sell USDT with Ethiopian birr, and order social-media growth (Telegram, 
 - **Mini App**: opens from the "Open App" button next to the typing box. Market, Rates, Orders, Support, and an **Admin** tab for owners and staff.
 - **Chat mode**: type `/start` or `/menu`. Coloured buttons, progress lines, messages that edit in place. Buy, sell, services, rates, orders, support tickets, policies, language, and the whole admin area (`/start` as an admin shows the queue).
 
-Payment is confirmed **manually**: customers upload a proof (kept in private R2 storage), an admin checks it against their bank/Bybit app and presses *Payment received*, then *Mark as released* with a reference. Runs on Cloudflare's free tier (Workers + D1 + R2 + static assets).
+Payment is confirmed **manually**: customers upload a proof (kept inside Telegram, in a private chat only the owner sees), an admin checks it against their bank/Bybit app and presses *Payment received*, then *Mark as released* with a reference. Runs on Cloudflare's free tier (Workers + D1 + static assets). No card or payment method is needed.
 
 Screenshots of every screen are in `docs/screenshots/`. Design notes are in `docs/DECISIONS.md` and `docs/ADMIN_DESIGN.md`.
 
@@ -25,7 +25,7 @@ The shop stays closed until rates, limits and at least one account and network e
 
 Follow **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)**: make the bot in BotFather, connect this repo to Cloudflare (the deploy command is `npm run ship`, which also applies the database migrations), add the secrets `BOT_TOKEN` and `WEBHOOK_SECRET`, then open `https://<your-worker>.workers.dev/connect` once. That page registers the webhook, the "Open App" button and the command list, so nothing has to run on a computer.
 
-Manual route (computer): `npx wrangler d1 create neon-p2p`, `npx wrangler r2 bucket create neon-proofs`, `npm run ship`, `npx wrangler secret put BOT_TOKEN`, `npx wrangler secret put WEBHOOK_SECRET`, then `/connect` (or `node scripts/telegram-setup.mjs`).
+Manual route (computer): `npx wrangler d1 create neon-p2p`, `npm run ship`, `npx wrangler secret put BOT_TOKEN`, `npx wrangler secret put WEBHOOK_SECRET`, then `/connect` (or `node scripts/telegram-setup.mjs`).
 
 Check `https://your-worker.workers.dev/health` returns `{"ok":true}`. The owner's Telegram id goes in `ADMIN_IDS` in `wrangler.toml`; each admin must press Start in the bot once to receive alerts.
 
@@ -37,7 +37,7 @@ Check `https://your-worker.workers.dev/health` returns `{"ok":true}`. The owner'
 
 ```bash
 npm test                  # 13 unit tests: money rounding, initData signature, validation
-npm run test:integration  # 79 checks: real Worker + local D1/R2 + fake Telegram (order lifecycles, stock, unlock rules, services, tickets, policies, chat mode, security)
+npm run test:integration  # 79 checks: real Worker + local D1 + fake Telegram (order lifecycles, stock, unlock rules, services, tickets, policies, chat mode, security)
 npm run test:ui           # Playwright + mocked Telegram.WebApp: buy flow, admin review and release, settings screens, services, tickets, Amharic, dark; fails on any console error; rewrites docs/screenshots
 ```
 
@@ -63,4 +63,4 @@ test/       unit, integration, UI
 
 - Money is stored as integers (USDT micro-units, birr cents). Buy amounts round up and sell amounts round down.
 - Every request is authenticated by verifying Telegram's signed `initData`; rates are locked at order creation; order creation is idempotent; every status change is atomic and logged (`order_events`, `audit_log`).
-- Customer proofs are private: only the customer and admins can open them, and they are deleted after the retention period. Alerts to admins contain text only.
+- Customer proofs are private: only the customer and admins can open them through the app. They are sent to a private Telegram chat (default: the first owner's chat with the bot; set `PROOF_CHAT_ID` to use a private channel instead). Telegram only lets a bot delete messages under 48 hours old, so after the retention period the app forgets the proof but the file stays in that private chat until someone clears it. Alerts to admins contain text only.

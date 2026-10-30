@@ -1,7 +1,11 @@
-// Proof of payment: images are stored in a private R2 bucket (env.PROOFS). Nothing here is ever served publicly;
-// the API streams a file only to the customer who uploaded it or to an admin.
+// Proof of payment. Images are kept in Telegram itself: the Worker sends each one, silently, as a file to a private
+// "vault" chat (PROOF_CHAT_ID, default the first owner's chat with the bot) and records Telegram's file id.
+// Nothing is ever served publicly; the API streams a file only to the customer who uploaded it or to an admin.
+// The column is still called r2_key from an earlier design; it holds "tg:<chat>:<message>:<file_id>".
+import { firstOwnerId } from './admin.js';
 import { ApiError } from './http.js';
 import { nowSec } from './orders.js';
+import { Telegram } from './telegram.js';
 
 export const MAX_PROOF_BYTES = 6 * 1024 * 1024;
 
@@ -18,12 +22,14 @@ async function sha256Hex(buffer) {
   return [...digest].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function bucket(env) {
-  if (!env.PROOFS) throw new ApiError(503, 'storage_unavailable', 'Receipts cannot be saved right now. Try again later.');
-  return env.PROOFS;
+const STORAGE_DOWN = () => new ApiError(503, 'storage_unavailable', 'Receipts cannot be saved right now. Try again later.');
+
+function vaultChat(env) {
+  const explicit = Number(env.PROOF_CHAT_ID);
+  return Number.isSafeInteger(explicit) && explicit !== 0 ? explicit : firstOwnerId(env);
 }
 
-/** Validates an uploaded image and puts it in R2. Returns what to record in order_proofs. */
+/** Validates an uploaded image and sends it to the vault chat. Returns what to record in order_proofs. */
 export async function storeImage(env, orderId, file, prefix = 'proofs') {
   if (file.size > MAX_PROOF_BYTES) throw new ApiError(413, 'photo_too_large', 'That image is too large. Use one under 6 MB.');
   const buffer = await file.arrayBuffer();
@@ -31,22 +37,44 @@ export async function storeImage(env, orderId, file, prefix = 'proofs') {
   const kind = sniffImage(new Uint8Array(buffer, 0, Math.min(16, buffer.byteLength)));
   if (!kind) throw new ApiError(400, 'bad_photo', 'Use a JPG, PNG or WebP image.');
   const sha256 = await sha256Hex(buffer);
-  const key = `${prefix}/${orderId}/${crypto.randomUUID()}.${kind.ext}`;
+  const chat = vaultChat(env);
+  if (!chat) throw STORAGE_DOWN();
   try {
-    await bucket(env).put(key, buffer, { httpMetadata: { contentType: kind.type }, customMetadata: { order: orderId } });
+    const sent = await new Telegram(env).sendDocument(chat, new Blob([buffer], { type: kind.type }), `${orderId}.${kind.ext}`, `${prefix === 'tickets' ? 'Ticket photo' : 'Proof'} ${orderId}`);
+    const fileId = sent?.document?.file_id;
+    if (!fileId) throw new Error('Telegram returned no file id');
+    return { r2_key: `tg:${chat}:${sent.message_id}:${fileId}`, content_type: kind.type, size: buffer.byteLength, sha256 };
   } catch (err) {
-    if (err instanceof ApiError) throw err;
-    console.error('R2 put failed', String(err?.message || err));
-    throw new ApiError(503, 'storage_unavailable', 'Receipts cannot be saved right now. Try again later.');
+    console.error('proof upload to Telegram failed', String(err?.message || err));
+    throw STORAGE_DOWN();
   }
-  return { r2_key: key, content_type: kind.type, size: buffer.byteLength, sha256 };
 }
 
-export async function discardImage(env, key) {
+const parseKey = (key) => {
+  const m = /^tg:(-?\d+):(\d+):([A-Za-z0-9_-]+)$/.exec(String(key || ''));
+  return m ? { chat: Number(m[1]), message: Number(m[2]), fileId: m[3] } : null;
+};
+
+/** Reads a stored image back from Telegram. Returns a Blob, or null when it is gone. */
+export async function fetchStored(env, key) {
+  const k = parseKey(key);
+  if (!k) return null;
   try {
-    await env.PROOFS?.delete(key);
+    return await new Telegram(env).downloadFile(k.fileId, MAX_PROOF_BYTES + 1024);
   } catch (err) {
-    console.warn('R2 delete failed', key, String(err?.message || err));
+    console.warn('proof download failed', String(err?.message || err));
+    return null;
+  }
+}
+
+/** Best effort: Telegram only lets a bot delete messages younger than 48 hours, so old files stay in the vault chat. */
+export async function discardImage(env, key) {
+  const k = parseKey(key);
+  if (!k) return;
+  try {
+    await new Telegram(env).deleteMessage(k.chat, k.message);
+  } catch {
+    /* too old, or already deleted */
   }
 }
 
@@ -92,9 +120,9 @@ export async function duplicateWarnings(db, orderId) {
 export async function proofResponse(env, db, orderId, proofId) {
   const row = await db.prepare('SELECT r2_key, content_type, deleted_at FROM order_proofs WHERE id = ? AND order_id = ?').bind(proofId, orderId).first();
   if (!row || !row.r2_key || row.deleted_at) throw new ApiError(404, 'not_found', 'That image is no longer available.');
-  const obj = await bucket(env).get(row.r2_key);
-  if (!obj) throw new ApiError(404, 'not_found', 'That image is no longer available.');
-  return new Response(obj.body, {
+  const blob = await fetchStored(env, row.r2_key);
+  if (!blob) throw new ApiError(404, 'not_found', 'That image is no longer available.');
+  return new Response(blob, {
     headers: {
       'content-type': row.content_type || 'application/octet-stream',
       'cache-control': 'private, no-store',
@@ -105,11 +133,11 @@ export async function proofResponse(env, db, orderId, proofId) {
   });
 }
 
-/** Retention job: delete the images of long-finished orders. The order record and history stay. */
+/** Retention job: forget (and where Telegram allows, delete) the images of long-finished orders. The order record and history stay. */
 export async function purgeOldProofs(env, now = nowSec(), limit = 50) {
   const { results: setting } = await env.DB.prepare("SELECT value FROM settings WHERE key = 'proof_retention_days'").all();
   const days = Number(setting[0]?.value ?? 90);
-  if (!(days > 0) || !env.PROOFS) return 0;
+  if (!(days > 0)) return 0;
   const cutoff = now - days * 86400;
   const { results } = await env.DB
     .prepare(

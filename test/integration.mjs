@@ -1,4 +1,4 @@
-// End-to-end test: the real Worker (local D1 and R2) against a fake Telegram.
+// End-to-end test: the real Worker (local D1) against a fake Telegram.
 // Covers the admin setup, proof storage, both order lifecycles, admin actions from the app and from chat buttons,
 // late proofs, blocking, alert retry and proof retention.   npm run test:integration
 import assert from 'node:assert/strict';
@@ -186,7 +186,7 @@ async function main() {
     assert.deepEqual(s.body.sides, { buy: true, sell: true, service: false });
   });
 
-  console.log('\nBuy order lifecycle (proof in R2, admin acts in the app)');
+  console.log('\nBuy order lifecycle (proof kept in Telegram, admin acts in the app)');
   let buy;
   const buyBody = () => ({ side: 'buy', usdt: '100', method: ids.telebirr, network: ids.trc20, address: ADDR_TRC20, idem: 'idem-buy-alice-01' });
   await step('input validation: amount, range, address by network kind, method, network', async () => {
@@ -244,7 +244,7 @@ async function main() {
     assert.equal((await api(ALICE, 'GET', `/api/orders/${buy.id}`)).body.order.status, 'awaiting_payment', 'rejected uploads change nothing');
   });
   let proofId;
-  await step('a receipt is stored privately, the order enters the queue and the admin gets a text-only alert with a review button', async () => {
+  await step('a receipt is stored privately in Telegram, the order enters the queue and the admin gets a text-only alert with a review button', async () => {
     const ok = await api(ALICE, 'POST', `/api/orders/${buy.id}/evidence`, evidenceForm({ text: 'Telebirr ref TX123 <b>', photo: png() }));
     assert.equal(ok.status, 200, JSON.stringify(ok.body));
     assert.equal(ok.body.order.status, 'evidence_submitted');
@@ -253,6 +253,10 @@ async function main() {
     assert.equal(ok.body.order.proofs[0].has_image, true);
     proofId = ok.body.order.proofs[0].id;
     assert.equal(takeCalls('sendPhoto').length, 0, 'receipts are never forwarded into chat');
+    const vault = lastPayload('sendDocument');
+    assert.equal(vault.chat_id, String(ADMIN.id), 'receipts go to the private vault chat (the first owner)');
+    assert.equal(vault.disable_notification, 'true');
+    assert.equal(vault.caption, `Proof ${buy.id}`);
     const alert = lastPayload('sendMessage', (p) => p.chat_id === ADMIN_CHAT && String(p.text).includes(buy.id));
     assert.ok(alert.text.includes('Telebirr ref TX123 &lt;b&gt;'), 'customer text is escaped');
     assert.ok(!alert.text.includes('late proof'));
@@ -839,7 +843,7 @@ async function main() {
     const o = await api(ALICE, 'GET', `/api/orders/${chatBuy}`);
     assert.deepEqual([o.body.order.status, o.body.order.usdt_micro, o.body.order.usdt_address], ['awaiting_payment', 25_000_000, ADDR_TRC20]);
   });
-  await step('sending proof in chat: a photo with a caption reaches the admins and R2', async () => {
+  await step('sending proof in chat: a photo with a caption reaches the admins and the vault', async () => {
     await tap(ALICE, `c:op:${chatBuy}`);
     assert.match(screenOf(ALICE).text, /receipt/i);
     await say(ALICE, undefined, { photo: [{ file_id: 'small' }, { file_id: 'large' }], caption: 'TXN-CHAT-1' });

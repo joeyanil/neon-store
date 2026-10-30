@@ -6,7 +6,7 @@
 |---|---|
 | Bot or Mini App? | **Both, in the same bot, both complete.** The Mini App opens from the "Open App" menu button; chat mode has buttons, progress lines and edit-in-place messages. Anything one can do, the other can. |
 | What does the shop sell? | USDT buy/sell, and the "Neon Ghost" social-media services (Telegram, Instagram, TikTok, YouTube). The old Vendor X subscription products are **not** part of the shop. |
-| Hosting | Cloudflare Workers + D1 + R2 (free tier). R2 holds customer proofs privately. |
+| Hosting | Cloudflare Workers + D1 + static assets (free tier, no card). Customer proofs are kept in Telegram: R2 needs a payment method, so each proof is sent silently to a private chat (the first owner's, or `PROOF_CHAT_ID`) and read back through the bot when an admin opens the order. |
 | Payment confirmation | **Manual.** Customer uploads a proof, an admin checks it and releases. |
 | Fees | **None.** Whatever Bybit deducts comes out of the shop's margin, so the app never adds a fee. |
 | Minimum order | 5 USDT by default, editable. |
@@ -39,7 +39,7 @@ Bybit Pay's merchant API is the only route to real automatic confirmation and ne
 
 ## Known limits
 
-- Proofs: JPG/PNG/WebP up to 6 MB, stored in private R2, deleted after the retention period (default 90 days).
+- Proofs: JPG/PNG/WebP up to 6 MB, kept in a private Telegram chat. After the retention period (default 90 days) the app forgets them; Telegram only lets the bot delete messages under 48 hours old, so the files themselves stay in that chat until someone clears it. The owner must press Start in the bot once, or uploads fail.
 - The Mini App needs a recent Telegram; older clients use an in-page action bar.
 - Tests mock Telegram's WebApp object. Do one real order on iOS and Android before launch.
 - Seeded policies and all Amharic text need the owner's and a native speaker's review.

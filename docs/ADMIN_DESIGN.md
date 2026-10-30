@@ -47,13 +47,13 @@ Rows are never hard-deleted once any order used them (orders point at them). The
 
 Each order stores a snapshot of the details it showed (`pay_snapshot`). If the admin changes an account number, orders already open keep paying the **old** number, which is right for the audit trail but dangerous if the old account is gone. So the edit screen shows "N open orders still use the old details" and recommends disabling the account first, waiting for those orders to finish, then adding the new one. Changes are written to an audit log.
 
-## 4. Proofs live in R2, not in the Telegram chat
+## 4. Proofs live in Telegram, not in the database
 
-* The customer's receipt photo goes straight to a private R2 bucket (`PROOFS`). The Worker checks the real file type from the first bytes (not just what the phone claims), limits it to 6 MB (the app shrinks photos first), and stores a SHA-256 hash.
+* The customer's receipt photo is sent silently by the Worker to a private Telegram chat (the first owner's chat with the bot, or `PROOF_CHAT_ID`); only Telegram's file id is stored. (An earlier design used a private R2 bucket; R2 needs a payment method, so it was dropped.) The Worker checks the real file type from the first bytes (not just what the phone claims), limits it to 6 MB (the app shrinks photos first), and stores a SHA-256 hash.
 * Nobody can open a proof except the customer who uploaded it and an admin. The app fetches it through an authenticated endpoint; there is no public URL.
 * **Duplicate-proof warning.** The same screenshot reused on a second order is the most common P2P scam. If a proof's hash or a typed transaction number already appears on another order, the admin sees a red warning with a link to that order.
 * The Telegram alert is now **text only** (summary + buttons). Customer receipts contain names and phone numbers; this keeps them out of a group chat that may have many members.
-* Retention: proofs of finished orders are deleted from R2 after a configurable number of days (default 90, 0 = keep forever). The order record and history stay.
+* Retention: proofs of finished orders are forgotten by the app after a configurable number of days (default 90, 0 = keep forever). The order record and history stay.
 
 ## 5. Admin area inside the Mini App
 
@@ -75,7 +75,7 @@ Only visible to admins (checked on the server for every request, not just hidden
 Default: a private message to every admin (needs only `ADMIN_IDS`; each admin must have started the bot once). Optional: an owner sends `/alerts` in a group where the bot is a member to move alerts there. The alert message ids are stored per order so every copy of the alert is updated when anyone acts, wherever they act (chat button or app).
 
 **What if the alert fails to send?**
-The customer's submission still succeeds (their proof is safe in R2 and the order shows in the admin queue). The cron job retries unsent alerts every five minutes.
+The customer's submission still succeeds (their proof is safe in the vault chat and the order shows in the admin queue). The cron job retries unsent alerts every five minutes.
 
 **What if the customer pays after the order expired?**
 This is a real case (paid at minute 31). Previously the app refused the receipt and said "contact Support". Now an expired order accepts a receipt for 24 hours and goes to the admin as **Late proof**. The admin decides (rate was locked at creation, so the admin may reject if the market moved).
@@ -93,7 +93,7 @@ Admins can block a customer from the order screen (and unblock). A blocked custo
 We store the Telegram id, first name, @username, language, their USDT address and birr account for the order they placed, and proofs (90 days by default).
 
 **Backups.**
-D1 has built-in point-in-time restore for 30 days (`wrangler d1 time-travel`). R2 has no backup; proofs are evidence for 90 days, not records.
+D1 has built-in point-in-time restore for 30 days (`wrangler d1 time-travel`). Proofs in the vault chat are not backed up elsewhere; they are evidence for 90 days, not records.
 
 **Money on the screen.**
 Admins see the same integer-computed amounts the customer was shown (buy totals rounded up, sell totals rounded down), copied from the stored order, never recomputed.

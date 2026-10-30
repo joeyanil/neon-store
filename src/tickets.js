@@ -1,9 +1,9 @@
-// Support tickets: a thread between one customer and the team, with optional photos (private R2) and an optional order.
+// Support tickets: a thread between one customer and the team, with optional photos (kept in Telegram) and an optional order.
 import { ApiError } from './http.js';
 import { nowSec } from './orders.js';
 import { getSettings } from './orders.js';
 import { alertTargets, appButton, getUser, baseUrl } from './notify.js';
-import { discardImage, storeImage } from './proofs.js';
+import { discardImage, fetchStored, storeImage } from './proofs.js';
 import { TelegramError, esc } from './telegram.js';
 import { cleanNote, isOrderId } from './validate.js';
 
@@ -237,9 +237,9 @@ export async function refreshTicketCards(env, tg, ticketId) {
 export async function ticketPhoto(env, ticketId, messageId) {
   const row = await env.DB.prepare('SELECT r2_key, content_type FROM ticket_messages WHERE id = ? AND ticket_id = ?').bind(messageId, ticketId).first();
   if (!row?.r2_key) throw new ApiError(404, 'not_found', 'That image is no longer available.');
-  const obj = await env.PROOFS?.get(row.r2_key);
-  if (!obj) throw new ApiError(404, 'not_found', 'That image is no longer available.');
-  return new Response(obj.body, {
+  const blob = await fetchStored(env, row.r2_key);
+  if (!blob) throw new ApiError(404, 'not_found', 'That image is no longer available.');
+  return new Response(blob, {
     headers: { 'content-type': row.content_type || 'application/octet-stream', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'content-disposition': 'inline', 'content-security-policy': "default-src 'none'; sandbox" },
   });
 }

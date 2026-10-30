@@ -15,7 +15,7 @@ The owner id is already set in `wrangler.toml` (`ADMIN_IDS`). To hand the shop t
 1. Sign in at dash.cloudflare.com (free account is enough).
 2. **Workers & Pages > Create > Import a repository** (connect GitHub, pick this repo).
 3. Project name: `neon-p2p-miniapp`. Build command: leave empty. **Deploy command: `npm run ship`**. Save and deploy.
-4. If the first deploy complains about the database or storage, open **Storage & Databases**, create a D1 database named `neon-p2p` and an R2 bucket named `neon-proofs`, then retry the deploy.
+4. If the first deploy complains about the database, open **Storage & Databases > D1**, create a database named `neon-p2p`, then retry the deploy. No card or R2 is needed: customer receipts are kept inside Telegram.
 
 ## 3. Add the two secrets
 
@@ -32,7 +32,11 @@ Then press **Deploy** (or push any change) so the Worker picks them up.
 
 Open `https://<your-worker>.workers.dev/connect` (the address is shown on the Worker's page), type the `WEBHOOK_SECRET`, press **Connect Telegram**. All lines should show a green tick.
 
-## 5. Fill in the shop
+## 5. Start the bot as the owner (needed for receipts)
+
+Open your bot in Telegram and press **Start** with the owner account. Customer receipts are sent silently to the owner's chat with the bot and read back from there, so this must be done once.
+
+## 6. Fill in the shop
 
 Open your bot, send `/start`, press **Open App**. The **Admin** tab appears for owners. Go to **Admin > Shop settings > Setup guide** and enter rates, order sizes, stock, payment accounts, USDT networks, services and policies.
 

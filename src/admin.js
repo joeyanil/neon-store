@@ -12,6 +12,9 @@ import { cleanAccount, cleanAddress, cleanLabel, cleanName, cleanNote, METHOD_KI
 
 const ownerIds = (env) => new Set(String(env.ADMIN_IDS || '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0));
 
+/** The first owner in ADMIN_IDS, or 0. */
+export const firstOwnerId = (env) => [...ownerIds(env)][0] || 0;
+
 /** 'owner' (ids in ADMIN_IDS), 'staff' (added in the app) or null. */
 export async function getRole(env, id) {
   if (ownerIds(env).has(id)) return 'owner';
