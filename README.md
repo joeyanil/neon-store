@@ -21,34 +21,13 @@ The owner fills these in **inside the app** (Admin > Shop settings, with a setup
 
 The shop stays closed until rates, limits and at least one account and network exist. **No fees are added**: whatever Bybit takes comes out of the shop's margin.
 
-## Setup (about 20 minutes)
+## Setup
 
-You need Node 20+, a free Cloudflare account, and a bot token from @BotFather.
+Follow **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)**: make the bot in BotFather, connect this repo to Cloudflare (the deploy command is `npm run ship`, which also applies the database migrations), add the secrets `BOT_TOKEN` and `WEBHOOK_SECRET`, then open `https://<your-worker>.workers.dev/connect` once. That page registers the webhook, the "Open App" button and the command list, so nothing has to run on a computer.
 
-```bash
-npm install
-npx wrangler login
-npx wrangler d1 create neon-p2p            # copy the database_id into wrangler.toml
-npx wrangler r2 bucket create neon-proofs  # private storage for customer proofs
-```
+Manual route (computer): `npx wrangler d1 create neon-p2p`, `npx wrangler r2 bucket create neon-proofs`, `npm run ship`, `npx wrangler secret put BOT_TOKEN`, `npx wrangler secret put WEBHOOK_SECRET`, then `/connect` (or `node scripts/telegram-setup.mjs`).
 
-1. In `wrangler.toml` set `database_id`, `ADMIN_IDS` (numeric Telegram id(s) of the owner(s), from @userinfobot) and `SUPPORT_USERNAME`.
-2. Create the tables: `npm run db:remote`
-3. Secrets (pick a long random `WEBHOOK_SECRET` using letters, digits, `_` or `-`):
-   ```bash
-   npx wrangler secret put BOT_TOKEN
-   npx wrangler secret put WEBHOOK_SECRET
-   ```
-4. `npm run deploy`, then copy the printed URL into `WEBAPP_URL` in `wrangler.toml` and deploy again.
-5. Connect Telegram (webhook, "Open App" menu button, command list):
-   ```bash
-   BOT_TOKEN=... WEBHOOK_SECRET=... WEBAPP_URL=https://your-worker.workers.dev node scripts/telegram-setup.mjs
-   ```
-6. In @BotFather: Bot Settings > Configure Mini App (or `/newapp`) with the same URL, so the app has a direct link and shows on the bot's profile.
-7. Open the bot as the owner, open **Admin > Shop settings > Setup guide** and fill everything in. Each admin must press Start in the bot once to receive alerts. To send alerts to a group instead, add the bot to the group and send `/alerts` there.
-8. **Switching the real bot last**: do all of the above with a test bot first. When happy, repeat steps 3 and 5 with the real bot's token. Old bots can stay running until then.
-
-Check `https://your-worker.workers.dev/health` returns `{"ok":true}`.
+Check `https://your-worker.workers.dev/health` returns `{"ok":true}`. The owner's Telegram id goes in `ADMIN_IDS` in `wrangler.toml`; each admin must press Start in the bot once to receive alerts.
 
 ## Admin commands (optional shortcuts; everything is also in the app and the chat menu)
 
@@ -58,7 +37,7 @@ Check `https://your-worker.workers.dev/health` returns `{"ok":true}`.
 
 ```bash
 npm test                  # 13 unit tests: money rounding, initData signature, validation
-npm run test:integration  # 78 checks: real Worker + local D1/R2 + fake Telegram (order lifecycles, stock, unlock rules, services, tickets, policies, chat mode, security)
+npm run test:integration  # 79 checks: real Worker + local D1/R2 + fake Telegram (order lifecycles, stock, unlock rules, services, tickets, policies, chat mode, security)
 npm run test:ui           # Playwright + mocked Telegram.WebApp: buy flow, admin review and release, settings screens, services, tickets, Amharic, dark; fails on any console error; rewrites docs/screenshots
 ```
 
