@@ -20,7 +20,7 @@ function safeEqual(a, b) {
 const COMMANDS = [
   { command: 'start', description: 'Main menu' }, { command: 'buy', description: 'Buy USDT' }, { command: 'sell', description: 'Sell USDT' },
   { command: 'services', description: 'Social-media services' }, { command: 'rates', description: 'Current rates' }, { command: 'orders', description: 'My orders' },
-  { command: 'support', description: 'Support' }, { command: 'policies', description: 'Rules and policies' }, { command: 'language', description: 'Language / ቋንቋ' },
+  { command: 'support', description: 'Support' }, { command: 'policies', description: 'Rules and policies' }
 ];
 
 export async function handleConnect(request, env, origin) {

@@ -6,10 +6,13 @@ import { textFor } from './chat-text.js';
 import { TelegramError } from './telegram.js';
 
 /** A button that sends callback data. `style` is 'primary' (blue), 'success' (green) or 'danger' (red). */
-export const btn = (text, data, style) => (style ? { text, callback_data: data, style } : { text, callback_data: data });
 export const P = 'primary';
 export const G = 'success';
 export const R = 'danger';
+/** Plain grey button, for secondary things. */
+export const W = 'plain';
+/** Buttons are blue unless told otherwise: green for the main action, red for cancel or stop, W (grey) for the quiet ones. */
+export const btn = (text, data, style = P) => (style === W ? { text, callback_data: data } : { text, callback_data: data, style });
 
 /** Lays buttons out `per` to a row. */
 export const grid = (buttons, per = 2) => {
@@ -29,7 +32,7 @@ export const newIdem = (userId) => `ch-${userId}-${crypto.randomUUID().replace(/
 export async function makeCtx(env, tg, from, chatId, msgId = null) {
   const db = env.DB;
   const now = nowSec();
-  const lang = String(from.language_code || '').startsWith('am') ? 'am' : 'en';
+  const lang = 'en'; // English only for now
   await db
     .prepare(
       `INSERT INTO users (id, first_name, username, language, can_dm, created_at, last_seen_at) VALUES (?, ?, ?, ?, 1, ?, ?)
@@ -40,7 +43,7 @@ export async function makeCtx(env, tg, from, chatId, msgId = null) {
   const user = await db.prepare('SELECT id, first_name, username, language, can_dm, blocked FROM users WHERE id = ?').bind(from.id).first();
   const row = await db.prepare('SELECT flow, step, data, message_id FROM chat_sessions WHERE user_id = ?').bind(from.id).first();
   const session = row ? { flow: row.flow, step: row.step, data: JSON.parse(row.data || '{}'), message_id: row.message_id } : null;
-  return { env, tg, db, from, chatId, msgId, user, lang: user.language, s: textFor(user.language), role: await getRole(env, from.id), session, base: baseUrl(env) };
+  return { env, tg, db, from, chatId, msgId, user, lang: 'en', s: textFor('en'), role: await getRole(env, from.id), session, base: baseUrl(env) };
 }
 
 export async function saveSession(ctx) {
@@ -88,4 +91,4 @@ export async function show(ctx, text, rows = []) {
 /** Keeps the chat tidy: what the person typed (an address, a name) is removed once we have read it. */
 export const tidy = (ctx, messageId) => ctx.tg.deleteMessage(ctx.chatId, messageId).catch(() => {});
 
-export const homeRow = (ctx) => [btn(ctx.s.btn.home, 'c:home')];
+export const homeRow = (ctx) => [btn(ctx.s.btn.home, 'c:home', W)];

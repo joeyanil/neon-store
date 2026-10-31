@@ -56,7 +56,7 @@ async function main() {
     assert.deepEqual(r.body.catalog, { methods: [], networks: [], services: [] });
     assert.equal(r.body.stock, null);
     assert.equal(r.body.support.username, 'Neon_ghost147');
-    assert.equal((await api(BOB, 'GET', '/api/bootstrap')).body.user.language, 'am');
+    assert.equal((await api(BOB, 'GET', '/api/bootstrap')).body.user.language, 'en', 'English only: the Telegram language code is ignored');
   });
   await step('the owner is recognised and sees an unfinished setup checklist', async () => {
     assert.equal((await api(ADMIN, 'GET', '/api/bootstrap')).body.role, 'owner');
@@ -417,13 +417,13 @@ async function main() {
     assert.equal(r.body.order.status, 'evidence_submitted');
     assert.ok(r.body.order.events.some((e) => e.note === 'additional evidence'));
   });
-  await step('admin rejects with a reason: the customer is told in Amharic, the reason is recorded', async () => {
+  await step('admin rejects with a reason: the customer is told in English, the reason is recorded', async () => {
     assert.equal((await api(ADMIN, 'POST', `/api/admin/orders/${sell.id}/reject`, { reason: 'because' })).body.error.field, 'reason');
     const r = await api(ADMIN, 'POST', `/api/admin/orders/${sell.id}/reject`, { reason: 'amount_mismatch' });
     assert.equal(r.body.order.status, 'rejected');
     const mine = await api(BOB, 'GET', `/api/orders/${sell.id}`);
     assert.equal(mine.body.order.reject_reason, 'amount_mismatch');
-    assert.match(dmTo(BOB.id).text, /አልተቀበለም: መጠኑ አይመሳሰልም/);
+    assert.match(dmTo(BOB.id).text, /was not accepted: Amount does not match/);
   });
 
   console.log('\nCancel, limits, expiry, late proof, pause, block');
@@ -812,7 +812,7 @@ async function main() {
     const buy = buttons(ALICE).find((b) => b.callback_data === 'c:buy');
     const sell = buttons(ALICE).find((b) => b.callback_data === 'c:sell');
     assert.equal(buy.style, 'success');
-    assert.equal(sell.style, 'danger');
+    assert.equal(sell.style, 'primary');
     assert.ok(buttons(ALICE).some((b) => b.web_app?.url), 'open app button');
     assert.ok(!buttons(ALICE).some((b) => b.callback_data === 'a:home'), 'no admin button for customers');
   });
@@ -924,10 +924,9 @@ async function main() {
     const pol = buttons(ALICE).find((b) => /^c:ps:\d+$/.test(b.callback_data));
     await tap(ALICE, pol.callback_data);
     assert.ok(screenOf(ALICE).text.length > 60);
-    await tap(ALICE, 'c:lg:am');
-    assert.match(screenOf(ALICE).text, /ዋጋ|USDT በብር/);
-    await tap(ALICE, 'c:lg:en');
+    await tap(ALICE, 'c:home');
     assert.match(screenOf(ALICE).text, /Buy and sell USDT/);
+    assert.ok(!buttons(ALICE).some((b) => /Language|ቋንቋ/.test(b.text)), 'there is no language button');
   });
   await step('rates screen shows both prices and hides the stock when it is not tracked', async () => {
     await tap(ALICE, 'c:rates');
@@ -975,10 +974,23 @@ async function main() {
     assert.equal((await api(ALICE, 'GET', '/api/bootstrap')).body.rates.paused, false);
   });
 
-  await step('language preference is saved', async () => {
-    await api(ALICE, 'POST', '/api/language', { language: 'am' });
-    assert.equal((await api(ALICE, 'GET', '/api/bootstrap')).body.user.language, 'am');
-    assert.equal((await api(ALICE, 'POST', '/api/language', { language: 'fr' })).status, 400);
+  await step('English is the only language: others are refused', async () => {
+    assert.equal((await api(ALICE, 'POST', '/api/language', { language: 'en' })).status, 200);
+    assert.equal((await api(ALICE, 'POST', '/api/language', { language: 'am' })).status, 400);
+    assert.equal((await api(ALICE, 'GET', '/api/bootstrap')).body.user.language, 'en');
+  });
+  await step('chat buttons follow the colour scheme: blue by default, green for the main action, red for cancel, grey for quiet ones', async () => {
+    await tap(ALICE, 'c:home');
+    const style = (data) => buttons(ALICE).find((b) => b.callback_data === data)?.style;
+    assert.equal(style('c:buy'), 'success');
+    assert.equal(style('c:sell'), 'primary');
+    assert.equal(style('c:svc'), 'primary');
+    assert.equal(style('c:rates'), undefined, 'secondary buttons stay grey');
+    await tap(ALICE, 'c:buy');
+    assert.equal(style('c:x'), 'danger', 'cancel is red');
+    assert.equal(style('c:back'), 'primary', 'back is blue');
+    assert.equal(style('c:home'), undefined);
+    await tap(ALICE, 'c:x');
   });
 
   console.log('\nConnect page');

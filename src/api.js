@@ -44,7 +44,7 @@ async function authenticate(request, env, { touch }) {
 
   const tgUser = login.user;
   const now = nowSec();
-  const firstLanguage = String(tgUser.language_code || '').startsWith('am') ? 'am' : 'en';
+  const firstLanguage = 'en'; // English only for now
   if (touch) {
     await env.DB
       .prepare(
@@ -82,7 +82,7 @@ export async function handleApi(request, env, tg) {
       const [s, catalog, role, stats] = await Promise.all([getSettings(db), getCatalog(db), getRole(env, user.id), customerStats(db, user.id)]);
       const stock = await stockInfo(db, s);
       return json({
-        user: { id: user.id, first_name: user.first_name, username: user.username, language: user.language, can_dm: Boolean(user.can_dm), blocked: Boolean(user.blocked) },
+        user: { id: user.id, first_name: user.first_name, username: user.username, language: 'en', can_dm: Boolean(user.can_dm), blocked: Boolean(user.blocked) },
         role,
         availability: sideAvailability(s, catalog),
         rates: { ready: s.buy_rate_cents > 0 && s.sell_rate_cents > 0, buy_cents: s.buy_rate_cents, sell_cents: s.sell_rate_cents, updated_at: s.rate_updated_at, paused: s.paused },
@@ -99,7 +99,7 @@ export async function handleApi(request, env, tg) {
 
     if (path === '/api/language' && method === 'POST') {
       const body = await readJson(request);
-      if (body.language !== 'en' && body.language !== 'am') throw new ApiError(400, 'bad_language', 'Choose English or Amharic.');
+      if (body.language !== 'en') throw new ApiError(400, 'bad_language', 'English is the only language for now.');
       await db.prepare('UPDATE users SET language = ? WHERE id = ?').bind(body.language, user.id).run();
       return json({ language: body.language });
     }

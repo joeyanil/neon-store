@@ -9,7 +9,7 @@ import { cancelOrder, submitEvidence } from './service.js';
 import { listPolicies } from './shop-admin.js';
 import { createTicket, customerReply, getTicket, isTicketId, listTickets, threadOf } from './tickets.js';
 import { BTN_ADMIN, handleAdminCallback, handleAdminInput } from './chat-admin.js';
-import { G, P, R, btn, clearSession, grid, homeRow, makeCtx, newIdem, progress, saveSession, show, tidy } from './chat-core.js';
+import { G, P, R, W, btn, clearSession, grid, homeRow, makeCtx, newIdem, progress, saveSession, show, tidy } from './chat-core.js';
 import { etb, usdt } from './chat-text.js';
 import { esc } from './telegram.js';
 
@@ -40,10 +40,10 @@ export async function showMenu(ctx, note = '') {
   await clearSession(ctx);
   const b = ctx.s.btn;
   const rows = [
-    [btn(b.buy, 'c:buy', G), btn(b.sell, 'c:sell', R)],
-    [btn(b.services, 'c:svc', P), btn(b.rates, 'c:rates')],
-    [btn(b.orders, 'c:ol:active:0'), btn(b.support, 'c:sup')],
-    [btn(b.policies, 'c:pol'), btn(b.language, 'c:lang')],
+    [btn(b.buy, 'c:buy', G), btn(b.sell, 'c:sell', P)],
+    [btn(b.services, 'c:svc', P), btn(b.rates, 'c:rates', W)],
+    [btn(b.orders, 'c:ol:active:0', W), btn(b.support, 'c:sup', P)],
+    [btn(b.policies, 'c:pol', W)],
   ];
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
   if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, P)]);
@@ -57,7 +57,7 @@ async function showRates(ctx) {
   const st = await stockInfo(ctx.db, settings);
   const rows = [];
   if (avail.buy) rows.push(btn(ctx.s.btn.buyNow, 'c:buy', G));
-  if (avail.sell) rows.push(btn(ctx.s.btn.sellNow, 'c:sell', R));
+  if (avail.sell) rows.push(btn(ctx.s.btn.sellNow, 'c:sell', P));
   const text = settings.max_usdt_micro > 0 && settings.buy_rate_cents > 0
     ? ctx.s.rateCard({ buy: settings.buy_rate_cents, sell: settings.sell_rate_cents, min: settings.min_usdt_micro, max: settings.max_usdt_micro, stock: st.tracking && st.show ? st.available : null, updated: ctx.s.ago(nowSec() - settings.rate_updated_at) })
     : ctx.s.shopClosed;
@@ -83,6 +83,7 @@ const head = (ctx, err) => {
   return `<b>${title}</b>\n${progress(labels, STEPS[flow].indexOf(step))}\n\n${preview}${err ? `${ctx.s.err(err)}\n\n` : ''}`;
 };
 
+const PLATFORM_ICON = { telegram: '✈️', instagram: '📸', tiktok: '🎵', youtube: '▶️', other: '🔹' };
 const navRow = (ctx) => [btn(ctx.s.btn.back, 'c:back'), btn(ctx.s.btn.cancel, 'c:x', R)];
 
 /** Draws the screen for the current step. */
@@ -97,14 +98,14 @@ async function renderStep(ctx, err = '') {
     const list = catalog.methods.filter((m) => m[side]);
     const buttons = list.map((m) => {
       const lock = side === 'buy' ? unlockProgress(m.unlock, stats) : null;
-      return btn(`${lock ? '🔒 ' : ''}${methodLabel(ctx, m)}`, `c:pm:${m.code}`);
+      return btn(`${lock ? '🔒' : m.kind === 'bank' ? '🏦' : '📱'} ${methodLabel(ctx, m)}`, `c:pm:${m.code}`, lock ? W : P);
     });
     const info = flow === 'svc' ? '' : `💱 1 USDT = ${etb(flow === 'buy' ? settings.buy_rate_cents : settings.sell_rate_cents)} ETB\n\n`;
     return show(ctx, `${h}${info}${side === 'buy' ? s.pickMethodBuy : s.pickMethodSell}`, [...grid(buttons), navRow(ctx)]);
   }
   if (step === 'network') {
     const side = flow === 'sell' ? 'sell' : 'buy';
-    const buttons = catalog.networks.filter((n) => n[side]).map((n) => btn(n.label, `c:pn:${n.code}`));
+    const buttons = catalog.networks.filter((n) => n[side]).map((n) => btn(`🌐 ${n.label}`, `c:pn:${n.code}`));
     return show(ctx, `${h}${s.pickNetwork}`, [...grid(buttons), navRow(ctx)]);
   }
   if (step === 'amount') {
@@ -124,11 +125,11 @@ async function renderStep(ctx, err = '') {
   }
   if (step === 'platform') {
     const platforms = [...new Set(catalog.services.map((x) => x.platform))];
-    return show(ctx, `${h}${s.askPlatform}`, [...grid(platforms.map((p) => btn(s.platforms[p] || p, `c:sp:${p}`))), navRow(ctx)]);
+    return show(ctx, `${h}${s.askPlatform}`, [...grid(platforms.map((p) => btn(`${PLATFORM_ICON[p] || '🔹'} ${s.platforms[p] || p}`, `c:sp:${p}`))), navRow(ctx)]);
   }
   if (step === 'service') {
     const list = catalog.services.filter((x) => x.platform === data.platform);
-    return show(ctx, `${h}${s.askService}`, [...list.map((x) => [btn(s.serviceLine({ name: serviceName(ctx, x), price: x.price_cents_per_1000 }), `c:ss:${x.code}`)]), navRow(ctx)]);
+    return show(ctx, `${h}${s.askService}`, [...list.map((x) => [btn(`${PLATFORM_ICON[x.platform] || '🔹'} ${s.serviceLine({ name: serviceName(ctx, x), price: x.price_cents_per_1000 })}`, `c:ss:${x.code}`)]), navRow(ctx)]);
   }
   if (step === 'qty') {
     const sv = catalog.services.find((x) => x.code === data.service);
@@ -304,12 +305,12 @@ async function handleProofInput(ctx, msg) {
 async function showOrders(ctx, filter, before) {
   const page = await listOrders(ctx.db, ctx.user.id, filter, Number(before) || null, 6);
   const s = ctx.s;
-  const rows = [[btn(s.btn.open, 'c:ol:active:0', filter === 'active' ? P : undefined), btn(s.btn.finished, 'c:ol:done:0', filter === 'done' ? P : undefined)]];
+  const rows = [[btn(s.btn.open, 'c:ol:active:0', filter === 'active' ? P : W), btn(s.btn.finished, 'c:ol:done:0', filter === 'done' ? P : W)]];
   for (const o of page.orders) {
     const what = o.side === 'service' ? `🛍 ${o.quantity.toLocaleString('en-US')}` : `${usdt(o.usdt_micro)} USDT`;
-    rows.push([btn(`${STATUS_ICON[o.status]} ${o.id} · ${o.side === 'buy' ? '🟢' : o.side === 'sell' ? '🔴' : ''} ${what}`.replace(/\s+/g, ' '), `c:ov:${o.id}`)]);
+    rows.push([btn(`${STATUS_ICON[o.status]} ${o.id} · ${o.side === 'buy' ? '🟢' : o.side === 'sell' ? '🔴' : ''} ${what}`.replace(/\s+/g, ' '), `c:ov:${o.id}`, W)]);
   }
-  if (page.next) rows.push([btn(s.btn.more, `c:ol:${filter}:${page.next}`)]);
+  if (page.next) rows.push([btn(s.btn.more, `c:ol:${filter}:${page.next}`, W)]);
   rows.push(homeRow(ctx));
   return show(ctx, `${s.ordersHead(filter)}${page.orders.length ? '' : `\n\n${s.nothing}`}`, rows);
 }
@@ -325,7 +326,7 @@ async function showOrder(ctx, id) {
   else lines.push(`${usdt(o.usdt_micro)} USDT ⇄ ${etb(o.etb_cents)} ETB`);
   const rows = [];
   if (['evidence_submitted', 'expired'].includes(o.status)) rows.push([btn(o.side === 'sell' ? s.btn.sent : s.btn.paid, `c:op:${id}`, G)]);
-  rows.push([btn(s.btn.refresh, `c:ov:${id}`), btn(s.btn.help, `c:th:${id}`)]);
+  rows.push([btn(s.btn.refresh, `c:ov:${id}`, W), btn(s.btn.help, `c:th:${id}`)]);
   rows.push([btn(s.btn.back, 'c:ol:active:0')], homeRow(ctx));
   return show(ctx, lines.join('\n'), rows);
 }
@@ -334,7 +335,8 @@ async function showOrder(ctx, id) {
 
 async function showSupport(ctx) {
   const s = ctx.s;
-  const rows = Object.keys(s.cats).map((c) => [btn(s.cats[c], `c:tc:${c}`)]);
+  const CAT_ICON = { failed_order: '⚠️', not_received: '📭', other: '💬', feedback: '⭐' };
+  const rows = Object.keys(s.cats).map((c) => [btn(`${CAT_ICON[c] || '💬'} ${s.cats[c]}`, `c:tc:${c}`)]);
   rows.push([btn(s.btn.myTickets, 'c:tl')], homeRow(ctx));
   return show(ctx, s.supportHead, rows);
 }
@@ -345,8 +347,8 @@ async function startTicket(ctx, category, orderId = null) {
   if (!orderId && ['failed_order', 'not_received'].includes(category)) {
     const page = await listOrders(ctx.db, ctx.user.id, 'all', null, 5);
     if (page.orders.length) {
-      const rows = page.orders.map((o) => [btn(`${STATUS_ICON[o.status]} ${o.id} · ${o.side === 'service' ? '🛍' : `${usdt(o.usdt_micro)} USDT`}`, `c:to:${o.id}`)]);
-      rows.push([btn(s.btn.skip, 'c:to:0'), btn(s.btn.cancel, 'c:x', R)]);
+      const rows = page.orders.map((o) => [btn(`${STATUS_ICON[o.status]} ${o.id} · ${o.side === 'service' ? '🛍' : `${usdt(o.usdt_micro)} USDT`}`, `c:to:${o.id}`, W)]);
+      rows.push([btn(s.btn.skip, 'c:to:0', W), btn(s.btn.cancel, 'c:x', R)]);
       return show(ctx, `${s.pickOrder}`, rows);
     }
   }
@@ -371,7 +373,7 @@ async function handleTicketInput(ctx, msg) {
 
 async function showTickets(ctx) {
   const list = await listTickets(ctx.db, ctx.user.id);
-  const rows = list.slice(0, 8).map((t) => [btn(ctx.s.ticketLine({ ...t, preview: t.preview.slice(0, 28) }), `c:tv:${t.id}`)]);
+  const rows = list.slice(0, 8).map((t) => [btn(ctx.s.ticketLine({ ...t, preview: t.preview.slice(0, 28) }), `c:tv:${t.id}`, W)]);
   rows.push([btn(ctx.s.btn.newTicket, 'c:sup')], homeRow(ctx));
   return show(ctx, `🎫 <b>${ctx.s.btn.myTickets.replace('🎫 ', '')}</b>${list.length ? '' : `\n\n${ctx.s.nothing}`}`, rows);
 }
@@ -409,7 +411,7 @@ async function handleTicketReplyInput(ctx, msg) {
 
 async function showPolicies(ctx) {
   const list = await listPolicies(ctx.db);
-  const rows = list.map((p) => [btn(ctx.lang === 'am' ? p.title_am || p.title_en : p.title_en, `c:ps:${p.id}`)]);
+  const rows = list.map((p) => [btn(`📄 ${p.title_en}`, `c:ps:${p.id}`)]);
   rows.push(homeRow(ctx));
   return show(ctx, ctx.s.policiesHead, rows);
 }
@@ -420,10 +422,6 @@ async function showPolicy(ctx, id) {
   if (!p) return showPolicies(ctx);
   const am = ctx.lang === 'am';
   return show(ctx, `<b>${esc(am ? p.title_am || p.title_en : p.title_en)}</b>\n\n${esc(am ? p.body_am || p.body_en : p.body_en)}`, [[btn(ctx.s.btn.back, 'c:pol')], homeRow(ctx)]);
-}
-
-async function showLanguage(ctx) {
-  return show(ctx, ctx.s.langHead, [[btn('English', 'c:lg:en', ctx.lang === 'en' ? P : undefined), btn('አማርኛ', 'c:lg:am', ctx.lang === 'am' ? P : undefined)], homeRow(ctx)]);
 }
 
 // ---------- entry points ----------
@@ -516,15 +514,6 @@ export async function handleChatCallback(env, tg, cb) {
       }
       case 'pol': await showPolicies(ctx); break;
       case 'ps': await showPolicy(ctx, a); break;
-      case 'lang': await showLanguage(ctx); break;
-      case 'lg': {
-        if (a === 'en' || a === 'am') {
-          await ctx.db.prepare('UPDATE users SET language = ? WHERE id = ?').bind(a, ctx.user.id).run();
-          const fresh = await makeCtx(env, tg, cb.from, chatId, ctx.msgId);
-          await showMenu(fresh, fresh.s.langSaved);
-        }
-        break;
-      }
       default: await showMenu(ctx);
     }
   } catch (err) {
@@ -560,7 +549,7 @@ export async function handleChatInput(env, tg, msg) {
 export async function handleChatCommand(env, tg, msg, cmd) {
   if (msg.chat.type !== 'private') return false;
   const ctx = await makeCtx(env, tg, msg.from, msg.chat.id);
-  const map = { '/start': showMenu, '/menu': showMenu, '/help': showMenu, '/rates': showRates, '/orders': (c) => showOrders(c, 'active', 0), '/support': showSupport, '/policies': showPolicies, '/language': showLanguage };
+  const map = { '/start': showMenu, '/menu': showMenu, '/help': showMenu, '/rates': showRates, '/orders': (c) => showOrders(c, 'active', 0), '/support': showSupport, '/policies': showPolicies };
   if (cmd === '/buy' || cmd === '/sell') return (await startFlow(ctx, cmd.slice(1)), true);
   if (cmd === '/services') return (await startFlow(ctx, 'svc'), true);
   const fn = map[cmd];

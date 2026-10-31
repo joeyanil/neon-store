@@ -69,12 +69,12 @@ const REASON_EN = { not_received: 'Payment not received', amount_mismatch: 'Amou
  * `open` is a ready-made button that opens the order in the Mini App (null when there is no way to link to it).
  */
 export function adminKeyboard(order, open = null) {
-  const btn = (text, action) => ({ text, callback_data: `o:${order.id}:${action}` });
+  const btn = (text, action, style) => ({ text, callback_data: `o:${order.id}:${action}`, style });
   const rows = [];
   if (open) rows.push([open]);
-  if (order.status === 'evidence_submitted') rows.push([btn('✅ Payment received', 'c'), btn('❌ Reject', 'r')]);
-  else if (order.status === 'processing') rows.push(open ? [btn('❌ Reject', 'r')] : [btn(order.side === 'service' ? '✅ Mark delivered' : '✅ Mark released', 'd'), btn('❌ Reject', 'r')]);
-  else if (order.status === 'awaiting_payment' || order.status === 'expired') rows.push([btn('❌ Reject', 'r')]);
+  if (order.status === 'evidence_submitted') rows.push([btn('✅ Payment received', 'c', 'success'), btn('❌ Reject', 'r', 'danger')]);
+  else if (order.status === 'processing') rows.push(open ? [btn('❌ Reject', 'r', 'danger')] : [btn(order.side === 'service' ? '✅ Mark delivered' : '✅ Mark released', 'd', 'success'), btn('❌ Reject', 'r', 'danger')]);
+  else if (order.status === 'awaiting_payment' || order.status === 'expired') rows.push([btn('❌ Reject', 'r', 'danger')]);
   return { inline_keyboard: rows };
 }
 
@@ -110,5 +110,6 @@ const COPY = {
 };
 
 export function copy(lang) {
-  return COPY[lang] || COPY.en;
+  void lang; // English only for now; the Amharic copy above is kept for later
+  return COPY.en;
 }

@@ -23,7 +23,7 @@ async function showAdmin(ctx) {
     [btn(a.review(sum.counts.review), 'a:q:review', P), btn(a.release(sum.counts.release), 'a:q:release', P)],
     [btn(a.tickets(sum.counts.tickets), 'a:tl')],
   ];
-  if (needOwner(ctx)) rows.push([btn(sum.paused ? a.resume : a.pause, 'a:p', sum.paused ? undefined : R)], [btn(a.rates, 'a:rt'), btn(a.stock, 'a:st')]);
+  if (needOwner(ctx)) rows.push([btn(sum.paused ? a.resume : a.pause, 'a:p', sum.paused ? G : R)], [btn(a.rates, 'a:rt'), btn(a.stock, 'a:st')]);
   rows.push(homeRow(ctx));
   return show(ctx, a.head(sum.counts) + (sum.paused ? '\n⏸ <b>Shop is paused</b>' : ''), rows);
 }

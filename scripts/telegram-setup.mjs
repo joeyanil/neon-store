@@ -29,7 +29,6 @@ const calls = [
     { command: 'orders', description: 'My orders' },
     { command: 'support', description: 'Support' },
     { command: 'policies', description: 'Rules and policies' },
-    { command: 'language', description: 'Language / ቋንቋ' },
   ] }],
 ];
 

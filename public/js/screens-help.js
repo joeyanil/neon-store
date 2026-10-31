@@ -16,11 +16,6 @@ export function helpScreen(ctx) {
   const ticketsBox = h('div', { class: 'stack' }, ...skeletons(64));
   const faqs = [1, 2, 3, 4, 5].map((n) => h('details', { class: 'faq' }, h('summary', null, t(`faq${n}_q`), icon('chevron', 20)), h('p', null, t(`faq${n}_a`))));
 
-  const langSeg = h('div', { class: 'seg', role: 'group', 'aria-label': t('language') },
-    [['en', 'English'], ['am', 'አማርኛ']].map(([code, label]) => h('button', {
-      type: 'button', 'aria-pressed': String(S.lang === code),
-      onclick: () => { if (S.lang !== code) { haptic.select(); ctx.setLang(code); } },
-    }, label)));
   const themeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': t('theme') },
     ['auto', 'light', 'dark'].map((p) => h('button', {
       type: 'button', 'aria-pressed': String(S.themePref === p),
@@ -43,7 +38,6 @@ export function helpScreen(ctx) {
     listRow({ title: t('policies_open'), lead: h('span', { class: 'side-dot svc', 'aria-hidden': 'true' }, icon('book', 20)), onClick: () => ctx.go('/policies') }),
     h('div', { class: 'stack' }, h('h2', { class: 'section-title' }, t('faq_title')), ...faqs),
     h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, t('settings_title')),
-      h('div', { class: 'field' }, h('div', { class: 'label' }, t('language')), langSeg),
       h('div', { class: 'field' }, h('div', { class: 'label' }, t('theme')), themeSeg),
       dmCard));
 

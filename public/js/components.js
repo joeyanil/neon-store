@@ -31,9 +31,9 @@ export function emptyState({ iconName, title, body, action }) {
     action);
 }
 
-export function langPill(onToggle) {
-  const next = getLang() === 'en' ? 'አማ' : 'EN';
-  return h('button', { class: 'langpill', type: 'button', onclick: onToggle, 'aria-label': t('language') }, icon('globe', 18), next);
+/** The shop is English only for now, so there is nothing to switch. */
+export function langPill() {
+  return null;
 }
 
 export function topBar({ title, sub, right }) {

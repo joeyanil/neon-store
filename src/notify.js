@@ -37,7 +37,7 @@ export async function botUsername(env, tg, settings) {
  * `query` is e.g. "a=NG-ABC123"; `startapp` the same thing for the link form, e.g. "a_NG-ABC123".
  */
 export async function appButton(env, tg, settings, chatId, text, query, startapp) {
-  if (chatId > 0) return { text, web_app: { url: `${baseUrl(env)}/?${query}` } };
+  if (chatId > 0) return { text, web_app: { url: `${baseUrl(env)}/?${query}` }, style: 'primary' };
   const name = await botUsername(env, tg, settings);
-  return name ? { text, url: `https://t.me/${name}?startapp=${startapp}` } : null;
+  return name ? { text, url: `https://t.me/${name}?startapp=${startapp}`, style: 'primary' } : null;
 }

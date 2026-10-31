@@ -156,7 +156,7 @@ export function methodFormScreen(ctx) {
       try { await admin.remove('methods', code); toast('Deleted', 'ok'); ctx.back(); } catch (err) { toast(errorText(err), 'error'); }
     } }, m.total_orders ? 'Delete (not possible: orders used it)' : 'Delete account') : null;
     return h('div', { class: 'stack' }, warn, presets,
-      card(f.kind.el, f.label_en.el, f.label_am.el), card(f.account_name.el, f.account_number.el, f.note.el),
+      card(f.kind.el, f.label_en.el), card(f.account_name.el, f.account_number.el, f.note.el),
       card(title('How it is used'), acceptBuy.el, paySell.el, active.el),
       card(title('Unlock rule (optional)'), h('p', { class: 'tiny' }, 'Keep a riskier method for trusted customers. Customers who do not meet the rule see it locked, with what is missing.'), f.unlock_orders.el, f.unlock_volume.el, ratio.el),
       del);
@@ -257,7 +257,7 @@ export function serviceFormScreen(ctx) {
       if (!(await confirmDialog('Delete this service?'))) return;
       try { await admin.remove('services', code); toast('Deleted', 'ok'); ctx.back(); } catch (err) { toast(errorText(err), 'error'); }
     } }, s.total_orders ? 'Delete (not possible: orders used it)' : 'Delete service') : null;
-    return h('div', { class: 'stack' }, presets, card(f.platform.el, f.name_en.el, f.name_am.el), card(f.price.el, f.min_qty.el, f.max_qty.el), card(f.eta_text.el, f.warranty_days.el, f.note.el), card(active.el), del);
+    return h('div', { class: 'stack' }, presets, card(f.platform.el, f.name_en.el), card(f.price.el, f.min_qty.el, f.max_qty.el), card(f.eta_text.el, f.warranty_days.el, f.note.el), card(active.el), del);
   });
   setActions({ text: 'Save', onClick: () => save?.() });
   return { el: root, destroy: () => setActions(null) };
@@ -295,7 +295,7 @@ export function policyFormScreen(ctx) {
       if (!(await confirmDialog('Delete this section?'))) return;
       try { await admin.remove('policies', id); toast('Deleted', 'ok'); ctx.back(); } catch (err) { toast(errorText(err), 'error'); }
     } }, 'Delete section') : null;
-    return h('div', { class: 'stack' }, card(f.title_en.el, f.body_en.el), card(f.title_am.el, f.body_am.el), card(active.el, isNew ? null : f.sort.el), del);
+    return h('div', { class: 'stack' }, card(f.title_en.el, f.body_en.el), card(active.el, isNew ? null : f.sort.el), del);
   });
   setActions({ text: 'Save', onClick: () => save?.() });
   return { el: root, destroy: () => setActions(null) };

@@ -9,12 +9,13 @@ const EN = {
   menuTitle: 'Neon Store',
   menuIntro: 'Buy and sell USDT with birr, or order growth for your Telegram, Instagram, TikTok and YouTube. Every order is checked by a person.',
   btn: {
-    buy: '🟢 Buy USDT', sell: '🔴 Sell USDT', services: '🛍 Services', rates: '📈 Rates', orders: '📦 My orders', support: '💬 Support', policies: '📜 Policies',
-    language: '🌐 Language', app: '🚀 Open App', admin: '🛠 Admin', back: '⬅ Back', home: '🏠 Menu', cancel: '✖ Cancel', confirm: '✅ Confirm order', change: '✏️ Start over',
-    paid: "📤 I've paid — send proof", sent: "📤 I've sent it — send proof", moreProof: '➕ Add more proof', done: '✅ Done', cancelOrder: '❌ Cancel order', yesCancel: 'Yes, cancel it',
-    keep: 'No, keep it', refresh: '🔄 Refresh', help: '💬 Help with this order', skip: 'Skip', newTicket: '➕ New ticket', myTickets: '🎫 My tickets', reply: '✍️ Reply', more: 'More ➡',
-    open: '🔵 Open', finished: '⚪ Finished', buyNow: '🟢 Buy USDT', sellNow: '🔴 Sell USDT',
+    buy: '🛒 Buy USDT', sell: '💸 Sell USDT', services: '🛍 Social services', rates: '📈 Rates', orders: '📦 My orders', support: '🎧 Support', policies: '📜 Policies',
+    language: '🌐 Language', app: '🚀 Open App', admin: '🛠 Admin', back: '↩️ Back', home: '🏠 Menu', cancel: '❌ Cancel', confirm: '✅ Confirm order', change: '✏️ Start over',
+    paid: "📤 I've paid — send proof", sent: "📤 I've sent it — send proof", moreProof: '➕ Add more proof', done: '✅ Done', cancelOrder: '❌ Cancel order', yesCancel: '✅ Yes, cancel it',
+    keep: '↩️ No, keep it', refresh: '🔄 Refresh', help: '🎧 Help with this order', skip: '⏭ Skip', newTicket: '➕ New ticket', myTickets: '🎫 My tickets', reply: '✍️ Reply', more: 'More ➡',
+    open: '🔵 Open', finished: '⚪ Finished', buyNow: '🛒 Buy USDT', sellNow: '💸 Sell USDT',
   },
+
   steps: { method: 'Method', network: 'Network', amount: 'Amount', wallet: 'Wallet', confirm: 'Confirm', payout: 'Receive via', name: 'Name', account: 'Account', platform: 'Platform', service: 'Service', qty: 'Quantity', link: 'Link', pay: 'Pay' },
   status: { awaiting_payment: 'Waiting for your payment', evidence_submitted: 'We are checking your proof', processing: 'Being completed now', completed: 'Completed', rejected: 'Not accepted', cancelled: 'Cancelled', expired: 'Expired' },
   reasons: { not_received: 'Payment not received', amount_mismatch: 'Amount does not match', unreadable: 'Proof unreadable', other: 'Other reason' },
@@ -73,8 +74,6 @@ const EN = {
   cancelDone: (id) => `🚫 Order ${id} was cancelled.`,
   cannotCancel: 'This order can no longer be cancelled.',
   policiesHead: '📜 <b>Rules and policies</b>\nTap a topic to read it.',
-  langHead: '🌐 Choose your language',
-  langSaved: 'Language saved.',
   supportHead: '💬 <b>Support</b>\nWhat do you need help with?',
   pickOrder: 'Which order is this about?',
   askTicket: 'Describe the problem. You can attach one photo too.',
@@ -169,4 +168,6 @@ const AM = {
 };
 
 export const TEXT = { en: EN, am: AM };
-export const textFor = (lang) => (lang === 'am' ? AM : EN);
+/** English only for now. The Amharic text below is kept for later but is not used. */
+export const textFor = () => EN;
+export const _AM_UNUSED = AM;

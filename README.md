@@ -3,7 +3,7 @@
 Buy and sell USDT with Ethiopian birr, and order social-media growth (Telegram, Instagram, TikTok, YouTube), all inside one Telegram bot. The same bot works two ways and **both do everything**:
 
 - **Mini App**: opens from the "Open App" button next to the typing box. Market, Rates, Orders, Support, and an **Admin** tab for owners and staff.
-- **Chat mode**: type `/start` or `/menu`. Coloured buttons, progress lines, messages that edit in place. Buy, sell, services, rates, orders, support tickets, policies, language, and the whole admin area (`/start` as an admin shows the queue).
+- **Chat mode**: type `/start` or `/menu`. Coloured buttons, progress lines, messages that edit in place. Buy, sell, services, rates, orders, support tickets, policies, and the whole admin area (`/start` as an admin shows the queue).
 
 Payment is confirmed **manually**: customers upload a proof (kept inside Telegram, in a private chat only the owner sees), an admin checks it against their bank/Bybit app and presses *Payment received*, then *Mark as released* with a reference. Runs on Cloudflare's free tier (Workers + D1 + static assets). No card or payment method is needed.
 
@@ -17,7 +17,7 @@ The owner fills these in **inside the app** (Admin > Shop settings, with a setup
 - Birr payment accounts (name, account holder, number, what each is used for, optional unlock rule)
 - USDT networks and deposit addresses
 - Services and prices (price per 1,000, min/max quantity, ETA, warranty)
-- Policies (Amharic and English), team (staff), where alerts go
+- Policies, team (staff), where alerts go
 
 The shop stays closed until rates, limits and at least one account and network exist. **No fees are added**: whatever Bybit takes comes out of the shop's margin.
 
@@ -45,7 +45,7 @@ Before going live: remove the `&& wrangler d1 execute ... demo-data.sql` part fr
 npm test                  # 13 unit tests: money rounding, initData signature, validation
 npm run test:integration  # 79 checks: real Worker + local D1 + fake Telegram (order lifecycles, stock, unlock rules, services, tickets, policies, chat mode, security)
 npm run test:demo         # the test-shop data: fills only what is empty, keeps the owner's own entries
-npm run test:ui           # Playwright + mocked Telegram.WebApp: buy flow, admin review and release, settings screens, services, tickets, Amharic, dark; fails on any console error; rewrites docs/screenshots
+npm run test:ui           # Playwright + mocked Telegram.WebApp: buy flow, admin review and release, settings screens, services, tickets, English-only, dark; fails on any console error; rewrites docs/screenshots
 ```
 
 The UI test needs Chromium (`npx playwright install chromium`). Local development: `npm run db:local && npm run dev`. Stop any other `wrangler dev` first (port 8787).
@@ -62,7 +62,7 @@ test/       unit, integration, UI
 
 ## Before going live
 
-- Have a native Amharic speaker read the `am` text (`public/js/i18n.js`, `src/chat-text.js`, `src/messages.js`) and the seeded policies. They are first drafts.
+- Read the seeded policies (Admin > Shop settings > Rules and policies) and edit them to match the shop. They are first drafts.
 - Do one real order on a phone (iOS and Android) with a test bot. The tests mock Telegram's WebApp object.
 - Enter the real prices for services when the shop owner has them (Admin > Services).
 

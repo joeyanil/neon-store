@@ -154,7 +154,7 @@ async function start() {
     const boot = await api.bootstrap();
     S.boot = boot;
     const saved = await TG.prefs.get('neon.lang');
-    S.lang = boot.user.language || saved || 'en';
+    S.lang = 'en'; // English only for now; saved language preferences are ignored
     setLang(S.lang);
     const deep = deepLink();
     if (deep) replace(deep, { root: true });

@@ -4,10 +4,11 @@
 
 | Question | Decision |
 |---|---|
-| Bot or Mini App? | **Both, in the same bot, both complete.** The Mini App opens from the "Open App" menu button; chat mode has buttons, progress lines and edit-in-place messages. Anything one can do, the other can. |
+| Bot or Mini App? | **Both, in the same bot, both complete.** The Mini App opens from the "Open App" menu button; chat mode has buttons, progress lines and edit-in-place messages. Anything one can do, the other can. Both read the same database, so what an admin saves in the app is what the chat bot shows on its next screen. |
 | What does the shop sell? | USDT buy/sell, and the "Neon Ghost" social-media services (Telegram, Instagram, TikTok, YouTube). The old Vendor X subscription products are **not** part of the shop. |
 | Hosting | Cloudflare Workers + D1 + static assets (free tier, no card). Customer proofs are kept in Telegram: R2 needs a payment method, so each proof is sent silently to a private chat (the first owner's, or `PROOF_CHAT_ID`) and read back through the bot when an admin opens the order. |
 | Payment confirmation | **Manual.** Customer uploads a proof, an admin checks it and releases. |
+| Chat bot colours | Like the reference bots: blue by default, green for the main action (Buy, Confirm, "I've paid"), red only for Cancel and Reject, grey for quiet buttons, and an icon on every button. |
 | Fees | **None.** Whatever Bybit deducts comes out of the shop's margin, so the app never adds a fee. |
 | Minimum order | 5 USDT by default, editable. |
 | Maximum order | No built-in maximum. The owner enters it; the shop stays closed until it is set. |
@@ -25,7 +26,7 @@
 | Rates | Set by the owner; locked into each order. | No exchange feed; customers never see a rate change mid-order. |
 | Order lifetime | 30 minutes to pay (editable); a cron job expires unpaid orders every 5 minutes. A proof sent within 24 hours after expiry still reaches an admin, marked late. | Real customers pay late. |
 | Open orders | 3 per customer (editable). | Limits abuse. |
-| Languages | English and Amharic. | Amharic text is a first draft and **needs a native speaker's review**. |
+| Languages | **English only** for now. | Requested by the owner. The Amharic translations are still in the code (`i18n.js`, `chat-text.js`, `messages.js`) but switched off: no language button, every customer gets English, and the admin forms have no Amharic fields. |
 | Money | Integers only (USDT micro-units, birr cents). Buys round up, sells round down; a service total is `ceil(quantity x price / 1000)`. | Floating point never touches money. |
 | Roles | `ADMIN_IDS` are owners; owners add staff in the app. Staff work the queue and tickets but cannot change settings. | Safe delegation. |
 
@@ -42,4 +43,4 @@ Bybit Pay's merchant API is the only route to real automatic confirmation and ne
 - Proofs: JPG/PNG/WebP up to 6 MB, kept in a private Telegram chat. After the retention period (default 90 days) the app forgets them; Telegram only lets the bot delete messages under 48 hours old, so the files themselves stay in that chat until someone clears it. The owner must press Start in the bot once, or uploads fail.
 - The Mini App needs a recent Telegram; older clients use an in-page action bar.
 - Tests mock Telegram's WebApp object. Do one real order on iOS and Android before launch.
-- Seeded policies and all Amharic text need the owner's and a native speaker's review.
+- The seeded policies need the owner's review.

@@ -249,7 +249,7 @@ async function main() {
     await page.close();
   });
 
-  console.log('\nPolicies, Amharic, dark');
+  console.log('\nPolicies, English only, dark');
   page = await newPage();
   await step('rules and policies open and show text', async () => {
     await tab(page, 'Support');
@@ -259,13 +259,16 @@ async function main() {
   });
   await page.close();
   page = await newPage({ user: { ...USER, language_code: 'am' } });
-  await step('Amharic home renders with the Ethiopic font', async () => {
+  await step('English only: an Amharic phone still gets English, and there is no language switch', async () => {
     await page.locator('.pillow.buy').waitFor();
-    await page.locator('.nav a').first().click();
-    await page.getByText('አማ').first().click().catch(() => {});
-    await page.waitForTimeout(700);
-    await shot(page, '61-home-am');
-    console.log('  >', (await body(page)).replace(/\n+/g, ' | ').slice(0, 200));
+    const text = await body(page);
+    assert.match(text, /Buy USDT/);
+    assert.ok(!/[ሀ-፿]/.test(text), 'no Ethiopic text on the home screen');
+    assert.equal(await page.locator('.langpill').count(), 0);
+    await tab(page, 'Support');
+    await page.waitForTimeout(500);
+    assert.ok(!/Language|አማርኛ/.test(await body(page)), 'no language setting in Support');
+    await shot(page, '61-home-english');
   });
   await page.close();
   page = await newPage({ scheme: 'dark' });
