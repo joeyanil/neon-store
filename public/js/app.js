@@ -189,6 +189,17 @@ function deepLink() {
   return null;
 }
 
+// After an admin saves anything, reload the shop data so the Market, Rates and Services screens show it at once.
+let reloading = false;
+addEventListener('neon:shop-changed', async () => {
+  if (reloading || !S.boot) return;
+  reloading = true;
+  try {
+    S.boot = { ...(await api.bootstrap()), user: { ...S.boot.user } };
+    if (S.boot.role) admin.summary().then((s) => { S.adminBadge = s.counts.review + s.counts.release + s.counts.tickets; paintNav(); }).catch(() => {});
+  } catch { /* the next screen load will try again */ } finally { reloading = false; }
+});
+
 async function main() {
   TG.init();
   S.themePref = (await TG.prefs.get('neon.theme')) || 'auto';

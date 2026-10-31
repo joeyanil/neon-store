@@ -43,6 +43,8 @@ async function request(method, path, { json, form, timeout = 20_000 } = {}) {
     throw new ApiError(e.code || 'server_error', e.message || 'Request failed', res.status, e);
   }
   noteServerTime(data?.server_time);
+  // Anything an admin saves can change what customers see (rates, accounts, services), so tell the app to reload its shop data.
+  if (method !== 'GET' && path.startsWith('/api/admin/')) dispatchEvent(new Event('neon:shop-changed'));
   return data;
 }
 

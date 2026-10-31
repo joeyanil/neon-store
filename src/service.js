@@ -244,6 +244,13 @@ async function handleCallback(env, tg, cb) {
   }
 }
 
+/** Marks the alert check as passed when the alerts would go to this very chat. */
+async function markAlertsReachable(env, chatId) {
+  const settings = await getSettings(env.DB);
+  if (settings.alerts_tested) return;
+  if ((await alertTargets(env, settings)).includes(chatId)) await setSetting(env.DB, 'alerts_tested', 1);
+}
+
 // ---------- the bot's own messages ----------
 
 async function handleMessage(env, tg, msg) {
@@ -270,6 +277,9 @@ async function handleMessage(env, tg, msg) {
   if (!text.startsWith('/')) return;
   const [rawCmd, ...args] = text.split(/\s+/);
   const cmd = rawCmd.split('@')[0].toLowerCase();
+
+  // An admin who writes to the bot in private has proven the bot can message them, so alerts to private messages work.
+  if (role && msg.chat.type === 'private' && (cmd === '/start' || cmd === '/menu')) await markAlertsReachable(env, msg.chat.id).catch(() => {});
 
   if (await handleChatCommand(env, tg, msg, cmd)) return;
 

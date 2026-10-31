@@ -36,7 +36,11 @@ Open `https://<your-worker>.workers.dev/connect` (the address is shown on the Wo
 
 Open your bot in Telegram and press **Start** with the owner account. Customer receipts are sent silently to the owner's chat with the bot and read back from there, so this must be done once.
 
-## 6. Fill in the shop
+## 6. The shop is pre-filled for testing
+
+The first deploy loads sample data (rates, stock, two payment accounts, three networks and all the Telegram, Instagram, TikTok and YouTube services). Prices, account numbers and addresses are placeholders: do not send real money. Edit or replace them in **Admin > Shop settings**. See "Test data" in the README for removing it before going live.
+
+## 7. Fill in the shop
 
 Open your bot, send `/start`, press **Open App**. The **Admin** tab appears for owners. Go to **Admin > Shop settings > Setup guide** and enter rates, order sizes, stock, payment accounts, USDT networks, services and policies.
 

@@ -1,7 +1,7 @@
 // Shared test harness: the real Worker running locally (wrangler dev, local D1) next to a fake Telegram server.
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
@@ -162,12 +162,18 @@ export function startFakeTelegram() {
 }
 
 /** Migrates a fresh local database, starts the Worker and waits until it answers. */
-export async function startStack({ extraVars = [] } = {}) {
+export async function startStack({ extraVars = [], beforeDemo = '', demoData = false } = {}) {
   const busy = await fetch(`${APP}/health`).then(() => true, () => false);
   if (busy) throw new Error('Port 8787 is already in use. Stop the other wrangler dev first.');
   await startFakeTelegram();
   console.log('Preparing local database…');
   wr(['d1', 'migrations', 'apply', 'neon-p2p', '--local', '--persist-to', persist]);
+  if (beforeDemo) {
+    const f = join(persist, 'before.sql');
+    writeFileSync(f, beforeDemo);
+    wr(['d1', 'execute', 'neon-p2p', '--local', '--persist-to', persist, '--file', f]);
+  }
+  if (demoData) runDemoSql();
   console.log('Starting Worker…');
   const vars = { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_IDS: String(ADMIN.id), ADMIN_CHAT_ID: String(ADMIN_CHAT), WEBAPP_URL: APP, TELEGRAM_API_BASE: `http://127.0.0.1:${TG_PORT}`, SUPPORT_USERNAME: 'Neon_ghost147' };
   const args = ['wrangler', 'dev', '--local', '--port', '8787', '--persist-to', persist, '--test-scheduled'];
@@ -182,6 +188,16 @@ export async function startStack({ extraVars = [] } = {}) {
     console.error(wlog);
     throw e;
   }
+}
+
+/** Runs scripts/demo-data.sql against the local test database, the way `npm run ship` does on Cloudflare. */
+export function runDemoSql() {
+  wr(['d1', 'execute', 'neon-p2p', '--local', '--persist-to', persist, '--file', 'scripts/demo-data.sql']);
+}
+export function sqlLocal(sql) {
+  const f = join(persist, `q${Date.now()}.sql`);
+  writeFileSync(f, sql);
+  wr(['d1', 'execute', 'neon-p2p', '--local', '--persist-to', persist, '--file', f]);
 }
 
 export const workerLog = () => wlog;

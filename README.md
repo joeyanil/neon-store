@@ -29,6 +29,12 @@ Manual route (computer): `npx wrangler d1 create neon-p2p`, `npm run ship`, `npx
 
 Check `https://your-worker.workers.dev/health` returns `{"ok":true}`. The owner's Telegram id goes in `ADMIN_IDS` in `wrangler.toml`; each admin must press Start in the bot once to receive alerts.
 
+## Test data
+
+While the shop is being tested, `npm run ship` also loads `scripts/demo-data.sql` once: sample rates and limits, 500 USDT of stock, two payment accounts, three USDT networks and a price list with every Telegram, Instagram, TikTok and YouTube service. **All of it is placeholder**: the prices are invented, the account numbers and addresses are fake (accounts are named TEST ACCOUNT), and nothing you entered yourself is overwritten or duplicated. Deleted rows are never re-added.
+
+Before going live: remove the `&& wrangler d1 execute ... demo-data.sql` part from `ship` in `package.json`, run `npx wrangler d1 execute neon-p2p --remote --file=scripts/clear-demo.sql`, then enter the real accounts, addresses and prices in the app.
+
 ## Admin commands (optional shortcuts; everything is also in the app and the chat menu)
 
 `/alerts`, `/setrate BUY SELL`, `/limits MIN MAX`, `/ttl MINUTES`, `/rates`, `/pause`, `/resume`, `/orders`. Admin replies to an alert card (it contains the NG-/TK- number) are sent to the customer.
@@ -38,6 +44,7 @@ Check `https://your-worker.workers.dev/health` returns `{"ok":true}`. The owner'
 ```bash
 npm test                  # 13 unit tests: money rounding, initData signature, validation
 npm run test:integration  # 79 checks: real Worker + local D1 + fake Telegram (order lifecycles, stock, unlock rules, services, tickets, policies, chat mode, security)
+npm run test:demo         # the test-shop data: fills only what is empty, keeps the owner's own entries
 npm run test:ui           # Playwright + mocked Telegram.WebApp: buy flow, admin review and release, settings screens, services, tickets, Amharic, dark; fails on any console error; rewrites docs/screenshots
 ```
 

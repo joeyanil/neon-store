@@ -16,7 +16,7 @@
 | "CBE unlocks after N orders" | Now a per-payment-method **unlock rule** (completed orders, USDT traded, more completed than cancelled). Locked methods show the customer what is missing. |
 | Data | Fresh start, nothing migrated. |
 | Switching the real bot | Last step, done by the owner after testing with a test bot. |
-| Prices for services | The owner will provide them; they are entered in Admin > Services. |
+| Prices for services | The owner will provide them; they are entered in Admin > Services. Until then the test shop carries invented placeholder prices (`scripts/demo-data.sql`), and the accounts and addresses in it are fake. |
 
 ## Everything else I chose (overrule any of it)
 
