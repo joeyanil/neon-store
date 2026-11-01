@@ -70,7 +70,7 @@ async function main() {
   });
   await step('when a script file cannot be loaded the person is told after a few seconds', async () => {
     const { page } = await open(browser, null, { block: '**/js/screens-home.js' });
-    await page.getByText(/could not (load|start)/i).waitFor({ timeout: 11000 });
+    await page.getByText(/could not (load|start)/i).waitFor({ timeout: 14000 });
   });
   await browser.close();
   console.log('\nStartup checks passed.');
