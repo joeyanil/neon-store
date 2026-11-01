@@ -1,5 +1,6 @@
 import { handleApi } from './api.js';
-import { handleConnect } from './connect.js';
+import { ensureWebhook, handleConnect } from './connect.js';
+import { webhookSecret } from './secret.js';
 import { json } from './http.js';
 import { purgeOldProofs } from './proofs.js';
 import { expireStaleOrders, handleUpdate, retryAlerts } from './service.js';
@@ -26,7 +27,8 @@ export default {
 
     if (url.pathname === '/telegram/webhook' && request.method === 'POST') {
       // Telegram sends the secret we registered with setWebhook in this header.
-      if (!env.WEBHOOK_SECRET || !safeEqual(request.headers.get('x-telegram-bot-api-secret-token') || '', env.WEBHOOK_SECRET)) {
+      const secret = await webhookSecret(env);
+      if (!secret || !safeEqual(request.headers.get('x-telegram-bot-api-secret-token') || '', secret)) {
         return new Response('forbidden', { status: 403 });
       }
       let update;
@@ -54,6 +56,8 @@ export default {
     }
     const tg = new Telegram(env);
     const now = Math.floor((event.scheduledTime || Date.now()) / 1000);
+    // If the webhook was lost or Telegram is being refused, put it back (this is what keeps the bot answering after any redeploy).
+    await ensureWebhook(env, tg, now).catch((err) => console.warn('ensureWebhook failed', String(err?.message || err)));
     const n = await expireStaleOrders(env, tg, now);
     if (n) console.log(`expired ${n} order(s)`);
     const a = await retryAlerts(env, tg).catch((err) => { console.warn('retryAlerts failed', String(err?.message || err)); return 0; });

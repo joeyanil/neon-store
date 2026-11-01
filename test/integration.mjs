@@ -3,7 +3,7 @@
 // late proofs, blocking, alert retry and proof retention.   npm run test:integration
 import assert from 'node:assert/strict';
 import {
-  ADDR_BEP20, ADDR_TRC20, ADMIN, ADMIN_CHAT, ALICE, APP, BOB, BOT_TOKEN, PNG_BYTES, WEBHOOK_SECRET, STAFF, adminSays, api, evidenceForm, lastCall, lastPayload, nextUpdateId, passed, png, press, screenOf,
+  ADDR_BEP20, ADDR_TRC20, ADMIN, ADMIN_CHAT, ALICE, APP, BOB, BOT_TOKEN, PNG_BYTES, WEBHOOK_SECRET, STAFF, adminSays, api, evidenceForm, lastCall, lastPayload, nextUpdateId, fakeWebhook, passed, png, press, screenOf,
   seedCatalog, startStack, step, stopStack, takeCalls, webhook, workerLog,
 } from './harness.mjs';
 import { signInitData } from './helpers.js';
@@ -994,22 +994,40 @@ async function main() {
   });
 
   console.log('\nConnect page');
-  await step('/connect registers webhook, menu button and commands; a wrong secret does nothing', async () => {
+  await step('/connect needs no password, says what is wrong, and one press connects everything', async () => {
+    fakeWebhook.url = '';
     const before = takeCalls('setWebhook').length;
-    const page = await fetch(`${APP}/connect`);
-    assert.equal(page.status, 200);
-    assert.match(await page.text(), /Connect Telegram/);
-    const post = (key) => fetch(`${APP}/connect`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `key=${encodeURIComponent(key)}` }).then((r) => r.text());
-    assert.match(await post('nope'), /not the right secret/);
-    assert.equal(takeCalls('setWebhook').length, before);
-    const ok = await post(WEBHOOK_SECRET);
+    const page = await (await fetch(`${APP}/connect`)).text();
+    assert.match(page, /Bot token works: @neon_test_bot/);
+    assert.match(page, /not to this app/);
+    assert.equal(takeCalls('setWebhook').length, before, 'opening the page changes nothing');
+    const ok = await (await fetch(`${APP}/connect`, { method: 'POST' })).text();
     assert.match(ok, /Done/);
     assert.match(ok, /neon_test_bot/);
     const hook = lastPayload('setWebhook');
     assert.equal(hook.url, `${APP}/telegram/webhook`);
-    assert.equal(hook.secret_token, WEBHOOK_SECRET);
+    assert.equal(hook.secret_token, WEBHOOK_SECRET, 'the secret comes from the bot token, not from a setting that a redeploy can wipe');
+    assert.equal(hook.drop_pending_updates, false, 'messages sent while the bot was silent are still answered');
     assert.equal(lastPayload('setChatMenuButton').menu_button.text, 'Open App');
     assert.ok(lastPayload('setMyCommands').commands.some((c) => c.command === 'buy'));
+    assert.match(await (await fetch(`${APP}/connect`)).text(), /Everything looks fine/);
+  });
+  await step('the bot repairs its own webhook from the 5-minute job when it was lost', async () => {
+    fakeWebhook.url = 'https://old.example/telegram/webhook';
+    const before = takeCalls('setWebhook').length;
+    await scheduledAt(Date.now());
+    await sleep(400);
+    assert.equal(takeCalls('setWebhook').length, before + 1);
+    assert.equal(fakeWebhook.url, `${APP}/telegram/webhook`);
+    await scheduledAt(Date.now());
+    await sleep(400);
+    assert.equal(takeCalls('setWebhook').length, before + 1, 'nothing to repair the second time');
+  });
+  await step('Telegram messages with a wrong or missing secret are refused', async () => {
+    const upd = { update_id: nextUpdateId(), message: { message_id: 9, from: ALICE, chat: { id: ALICE.id, type: 'private' }, text: '/start' } };
+    assert.equal((await webhook(upd, 'wrong')).status, 403);
+    assert.equal((await webhook(upd, '')).status, 403);
+    assert.equal((await webhook(upd)).status, 200);
   });
 
   console.log(`\nAll ${passed} integration checks passed.`);

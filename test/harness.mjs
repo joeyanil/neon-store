@@ -5,12 +5,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
+import { webhookSecret } from '../src/secret.js';
 import { signInitData } from './helpers.js';
 
 export const APP = 'http://127.0.0.1:8787';
 export const TG_PORT = 8788;
 export const BOT_TOKEN = '123456:TEST-TOKEN';
-export const WEBHOOK_SECRET = 'whsec_test_secret';
+export const WEBHOOK_SECRET = await webhookSecret({ BOT_TOKEN }); // derived from the bot token, like in production
 export const ADMIN = { id: 900001, first_name: 'Admin' };
 export const STAFF = { id: 900002, first_name: 'Selam', username: 'selam_staff' };
 export const ALICE = { id: 111001, first_name: 'Alice', username: 'alice', language_code: 'en' };
@@ -31,6 +32,8 @@ export let passed = 0;
 // ---------- fake Telegram ----------
 export const tgCalls = [];
 let msgId = 1000;
+/** What the fake Telegram currently has registered as the webhook (tests change it to simulate a lost webhook). */
+export const fakeWebhook = { url: '', pending_update_count: 0 };
 const fakeTelegram = createServer(async (req, res) => {
   if (req.url.startsWith('/file/')) {
     res.writeHead(200, { 'content-type': 'image/png' });
@@ -54,6 +57,8 @@ const fakeTelegram = createServer(async (req, res) => {
   let result = true;
   if (method === 'sendMessage') result = { message_id: ++msgId };
   if (method === 'getFile') result = { file_id: payload.file_id, file_path: `photos/${payload.file_id}.png`, file_size: 70 };
+  if (method === 'setWebhook') fakeWebhook.url = payload.url;
+  if (method === 'getWebhookInfo') result = { ...fakeWebhook };
   if (method === 'getMe') result = { id: 1, is_bot: true, username: 'neon_test_bot' };
   if (method === 'sendDocument') { const id = ++msgId; result = { message_id: id, document: { file_id: `doc_${id}` } }; }
   if (method === 'sendPhoto') result = { message_id: ++msgId, photo: [{ file_id: 'small' }, { file_id: 'big' }] };
@@ -175,7 +180,7 @@ export async function startStack({ extraVars = [], beforeDemo = '', demoData = f
   }
   if (demoData) runDemoSql();
   console.log('Starting Worker…');
-  const vars = { BOT_TOKEN, WEBHOOK_SECRET, ADMIN_IDS: String(ADMIN.id), ADMIN_CHAT_ID: String(ADMIN_CHAT), WEBAPP_URL: APP, TELEGRAM_API_BASE: `http://127.0.0.1:${TG_PORT}`, SUPPORT_USERNAME: 'Neon_ghost147' };
+  const vars = { BOT_TOKEN, ADMIN_IDS: String(ADMIN.id), ADMIN_CHAT_ID: String(ADMIN_CHAT), WEBAPP_URL: APP, TELEGRAM_API_BASE: `http://127.0.0.1:${TG_PORT}`, SUPPORT_USERNAME: 'Neon_ghost147' };
   const args = ['wrangler', 'dev', '--local', '--port', '8787', '--persist-to', persist, '--test-scheduled'];
   for (const [k, v] of Object.entries(vars)) args.push('--var', `${k}:${v}`);
   for (const v of extraVars) args.push('--var', v);

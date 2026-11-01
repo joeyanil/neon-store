@@ -97,6 +97,10 @@ export class Telegram {
     return blob.size > maxBytes ? null : blob;
   }
 
+  getWebhookInfo() {
+    return this.call('getWebhookInfo', {});
+  }
+
   getMe() {
     return this.call('getMe', {});
   }

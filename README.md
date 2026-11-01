@@ -23,9 +23,9 @@ The shop stays closed until rates, limits and at least one account and network e
 
 ## Setup
 
-Follow **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)**: make the bot in BotFather, connect this repo to Cloudflare (the deploy command is `npm run ship`, which also applies the database migrations), add the secrets `BOT_TOKEN` and `WEBHOOK_SECRET`, then open `https://<your-worker>.workers.dev/connect` once. That page registers the webhook, the "Open App" button and the command list, so nothing has to run on a computer.
+Follow **[SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)**: make the bot in BotFather, connect this repo to Cloudflare (the deploy command is `npm run ship`, which also applies the database migrations), add the secret `BOT_TOKEN`, then open `https://<your-worker>.workers.dev/connect` once. That page registers the webhook, the "Open App" button and the command list, so nothing has to run on a computer.
 
-Manual route (computer): `npx wrangler d1 create neon-p2p`, `npm run ship`, `npx wrangler secret put BOT_TOKEN`, `npx wrangler secret put WEBHOOK_SECRET`, then `/connect` (or `node scripts/telegram-setup.mjs`).
+Manual route (computer): `npx wrangler d1 create neon-p2p`, `npm run ship`, `npx wrangler secret put BOT_TOKEN`, then `/connect` (or `node scripts/telegram-setup.mjs`).
 
 Check `https://your-worker.workers.dev/health` returns `{"ok":true}`. The owner's Telegram id goes in `ADMIN_IDS` in `wrangler.toml`; each admin must press Start in the bot once to receive alerts.
 

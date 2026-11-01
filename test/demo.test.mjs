@@ -1,7 +1,7 @@
 // The test-shop data (scripts/demo-data.sql): fills only what is empty, keeps what the owner entered, and never
 // re-adds what was deleted.   npm run test:demo
 import assert from 'node:assert/strict';
-import { ADMIN, ALICE, api, nextUpdateId, runDemoSql, startStack, step, stopStack, webhook } from './harness.mjs';
+import { ADMIN, ALICE, api, nextUpdateId, runDemoSql, screenOf, startStack, step, stopStack, webhook } from './harness.mjs';
 
 const OWNER_WORK = `
 UPDATE settings SET value = '17000', updated_at = 1 WHERE key = 'buy_rate_cents';
@@ -47,6 +47,37 @@ async function main() {
     assert.equal(await alerts(), false);
     await webhook({ update_id: nextUpdateId(), message: { message_id: 1, from: ADMIN, chat: { id: ADMIN.id, type: 'private' }, text: '/start' } });
     assert.equal(await alerts(), true);
+  });
+  const say = (u, text) => webhook({ update_id: nextUpdateId(), message: { message_id: 7000 + nextUpdateId(), from: u, chat: { id: u.id, type: 'private' }, text } });
+  const tap = (u, data) => webhook({ update_id: nextUpdateId(), callback_query: { id: `cb${nextUpdateId()}`, from: u, data, message: { message_id: screenOf(u)?.id, chat: { id: u.id, type: 'private' } } } });
+  const texts = (u) => screenOf(u).rows.flat().map((b) => b.text).join(' | ');
+  await step('what an admin saves in the app shows up in the chat bot straight away: rates, services, prices, accounts', async () => {
+    await say(ALICE, '/start');
+    await tap(ALICE, 'c:rates');
+    assert.match(screenOf(ALICE).text, /170\.00 ETB/, 'the owner\'s buy rate');
+    await api(ADMIN, 'PUT', '/api/admin/settings', { buy_rate: '171.25', sell_rate: '160' });
+    await tap(ALICE, 'c:rates');
+    assert.match(screenOf(ALICE).text, /171\.25 ETB/);
+    assert.match(screenOf(ALICE).text, /160\.00 ETB/);
+    await tap(ALICE, 'c:svc');
+    await tap(ALICE, 'c:sp:telegram');
+    assert.match(texts(ALICE), /Telegram subscribers — 90\.00 ETB \/ 1,000/);
+    await api(ADMIN, 'PUT', '/api/admin/services/demo-tg-subs', { price: '95.5' });
+    await api(ADMIN, 'POST', '/api/admin/services', { platform: 'telegram', name_en: 'Telegram boosts', price: '300', min_qty: 10, max_qty: 500 });
+    await tap(ALICE, 'c:svc');
+    await tap(ALICE, 'c:sp:telegram');
+    assert.match(texts(ALICE), /Telegram subscribers — 95\.50 ETB \/ 1,000/);
+    assert.match(texts(ALICE), /Telegram boosts — 300\.00 ETB \/ 1,000/);
+    await api(ADMIN, 'PUT', '/api/admin/services/demo-tg-views', { active: false });
+    await tap(ALICE, 'c:svc');
+    await tap(ALICE, 'c:sp:telegram');
+    assert.ok(!/post views/.test(texts(ALICE)), 'a service the owner switched off disappears');
+    await api(ADMIN, 'POST', '/api/admin/methods', { kind: 'mobile', label_en: 'M-Pesa', account_name: 'Neon Store', account_number: '0711223344' });
+    await tap(ALICE, 'c:buy');
+    assert.match(texts(ALICE), /M-Pesa/);
+    await api(ADMIN, 'PUT', '/api/admin/settings', { paused: true });
+    await tap(ALICE, 'c:buy');
+    assert.match(screenOf(ALICE).text, /paused/);
   });
   console.log('\nDemo data checks passed.');
 }

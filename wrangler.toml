@@ -37,4 +37,4 @@ AUTH_MAX_AGE_SEC = "86400"
 
 # Secrets (never put these in this file). Set them once with:
 #   wrangler secret put BOT_TOKEN
-#   wrangler secret put WEBHOOK_SECRET
+# Only BOT_TOKEN is needed. The webhook secret is derived from it, and the Worker repairs its own webhook every 5 minutes.

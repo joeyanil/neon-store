@@ -17,20 +17,15 @@ The owner id is already set in `wrangler.toml` (`ADMIN_IDS`). To hand the shop t
 3. Project name: `neon-p2p-miniapp`. Build command: leave empty. **Deploy command: `npm run ship`**. Save and deploy.
 4. If the first deploy complains about the database, open **Storage & Databases > D1**, create a database named `neon-p2p`, then retry the deploy. No card or R2 is needed: customer receipts are kept inside Telegram.
 
-## 3. Add the two secrets
+## 3. Add the bot token as a secret
 
-Worker > **Settings > Variables and Secrets > Add** (type: **Secret**):
-
-| Name | Value |
-|---|---|
-| `BOT_TOKEN` | the token from BotFather |
-| `WEBHOOK_SECRET` | any long random text using only letters, digits, `_` and `-` (at least 16 characters). Save it somewhere; you need it once in step 4. |
-
-Then press **Deploy** (or push any change) so the Worker picks them up.
+Open the Worker > **Settings > Variables and secrets** (the **runtime** list, not the one under Builds) > **Add**. Type **Secret**, name `BOT_TOKEN`, value: the token from BotFather. Save and deploy.
 
 ## 4. Connect Telegram
 
-Open `https://<your-worker>.workers.dev/connect` (the address is shown on the Worker's page), type the `WEBHOOK_SECRET`, press **Connect Telegram**. All lines should show a green tick.
+Open `https://<your-worker>.workers.dev/connect` (the address is shown on the Worker's page). It shows whether the bot token works, where Telegram is sending messages, and the database. Press **Connect Telegram**; all lines should show a green tick. No password is needed.
+
+If the bot ever stops answering, open this page again: it tells you why. The Worker also repairs its own connection every 5 minutes.
 
 ## 5. Start the bot as the owner (needed for receipts)
 
@@ -49,5 +44,5 @@ Optional in BotFather: `/mybots` > your bot > Bot Settings > Configure Mini App 
 ## Handing it to the shop owner
 
 1. He creates his own bot with `/newbot` and (ideally) his own Cloudflare account.
-2. Change `ADMIN_IDS` in `wrangler.toml` to his id; redeploy; set his `BOT_TOKEN` and `WEBHOOK_SECRET`; open `/connect` again.
+2. Change `ADMIN_IDS` in `wrangler.toml` to his id; redeploy; set his `BOT_TOKEN` secret; open `/connect` again.
 3. Send him the GitHub repo (or transfer it). Revoke every token you used while testing.
