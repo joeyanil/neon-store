@@ -10,7 +10,7 @@ import {
 import { alertTargets, appButton, baseUrl, getUser, orderUrl } from './notify.js';
 import { addProofRow, discardImage, duplicateWarnings, listProofs, storeImage } from './proofs.js';
 import { TelegramError, esc } from './telegram.js';
-import { handleChatCallback, handleChatCommand, handleChatInput } from './chat.js';
+import { handleChatCallback, handleChatCommand, handleChatFallback, handleChatInput } from './chat.js';
 import { adminClose, adminReply, getTicket } from './tickets.js';
 import { cleanNote } from './validate.js';
 
@@ -119,20 +119,38 @@ export async function submitEvidence(env, tg, userId, orderId, { text, photo }) 
     const set = { evidence_count: row.evidence_count + 1 };
     if (note) set.evidence_text = note;
     if (late) set.late = 1;
+    // Several proofs sent at the same moment (a retry on a slow connection): the first moves the order into review,
+    // the others are added to it. The counter is incremented in SQL so two at once cannot both slip past the limit.
+    const addMore = async () => {
+      const res = await db
+        .prepare(`UPDATE orders SET evidence_count = evidence_count + 1, ${note ? 'evidence_text = ?, ' : ''}updated_at = ? WHERE id = ? AND status = 'evidence_submitted' AND evidence_count < ?`)
+        .bind(...(note ? [note] : []), now, orderId, MAX_EVIDENCE)
+        .run();
+      if (res.meta.changes !== 1) {
+        const cur = await getOrderRow(db, orderId);
+        if (cur?.status === 'evidence_submitted') throw new ApiError(429, 'too_many_evidence', 'You have reached the limit for this order. Contact Support.');
+        throw new ApiError(409, 'not_open', 'This order changed while you were sending. Refresh and check its status.');
+      }
+      await logEvent(db, orderId, 'evidence_submitted', `user:${userId}`, 'additional evidence');
+    };
 
     if (row.status === 'evidence_submitted') {
-      await patchOrder(db, orderId, set);
-      await logEvent(db, orderId, 'evidence_submitted', `user:${userId}`, 'additional evidence');
+      await addMore();
     } else {
+      let res;
       if (row.status === 'awaiting_payment' && late) {
         await transition(db, orderId, 'awaiting_payment', 'expired', 'system', { now });
-        await transition(db, orderId, 'expired', 'evidence_submitted', `user:${userId}`, { set, note: 'late proof', now });
+        res = await transition(db, orderId, 'expired', 'evidence_submitted', `user:${userId}`, { set, note: 'late proof', now });
       } else if (row.status === 'expired') {
-        const res = await transition(db, orderId, 'expired', 'evidence_submitted', `user:${userId}`, { set, note: 'late proof', now });
-        if (!res.ok) throw new ApiError(409, 'not_open', 'This order changed while you were sending. Refresh and check its status.');
+        res = await transition(db, orderId, 'expired', 'evidence_submitted', `user:${userId}`, { set, note: 'late proof', now });
       } else {
-        const res = await transition(db, orderId, 'awaiting_payment', 'evidence_submitted', `user:${userId}`, { set, now });
-        if (!res.ok) throw new ApiError(409, 'not_open', 'This order changed while you were sending. Refresh and check its status.');
+        res = await transition(db, orderId, 'awaiting_payment', 'evidence_submitted', `user:${userId}`, { set, now });
+      }
+      if (!res.ok) {
+        // Lost the race to another proof of the same customer: add this one to the order instead of failing.
+        const cur = await getOrderRow(db, orderId);
+        if (cur?.status === 'evidence_submitted') await addMore();
+        else throw new ApiError(409, 'not_open', 'This order changed while you were sending. Refresh and check its status.');
       }
     }
   } catch (err) {
@@ -274,7 +292,11 @@ async function handleMessage(env, tg, msg) {
   }
 
   if (!text.startsWith('/') && (await handleChatInput(env, tg, msg))) return;
-  if (!text.startsWith('/')) return;
+  if (!text.startsWith('/')) {
+    // A photo or text the bot was not waiting for: show the menu so the person is never left without an answer.
+    if (msg.chat.type === 'private' && (text || msg.photo || msg.document)) await handleChatFallback(env, tg, msg, 'Use the buttons below to buy, sell or get help.').catch(() => {});
+    return;
+  }
   const [rawCmd, ...args] = text.split(/\s+/);
   const cmd = rawCmd.split('@')[0].toLowerCase();
 
@@ -283,7 +305,13 @@ async function handleMessage(env, tg, msg) {
 
   if (await handleChatCommand(env, tg, msg, cmd)) return;
 
-  if (role !== 'owner') return; // the commands below change the shop's settings
+  const OWNER_COMMANDS = ['/alerts', '/setrate', '/ttl', '/limits', '/pause', '/resume'];
+  if (role !== 'owner') {
+    // Not an owner command and not a known customer command: say so and show the menu.
+    if (msg.chat.type === 'private') await handleChatFallback(env, tg, msg, OWNER_COMMANDS.includes(cmd) ? 'That command is only for the shop owner.' : 'I do not know that command. Use the buttons below.').catch(() => {});
+    return; // the commands below change the shop's settings
+  }
+  if (!OWNER_COMMANDS.includes(cmd) && msg.chat.type === 'private') return handleChatFallback(env, tg, msg, 'I do not know that command. Use the buttons below.');
 
   if (cmd === '/alerts') {
     const here = msg.chat.type === 'private' ? 0 : msg.chat.id;

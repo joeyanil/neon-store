@@ -68,14 +68,11 @@ export const haptic = {
 let backHandler = null;
 export function setBack(handler) {
   if (!tg) return;
-  if (backHandler) tg.BackButton.offClick(backHandler);
+  safe(() => { if (backHandler) tg.BackButton.offClick(backHandler); });
   backHandler = handler;
-  if (handler) {
-    tg.BackButton.onClick(handler);
-    tg.BackButton.show();
-  } else {
-    tg.BackButton.hide();
-  }
+  safe(() => {
+    if (handler) { tg.BackButton.onClick(handler); tg.BackButton.show(); } else tg.BackButton.hide();
+  });
 }
 
 // ---------- the big bottom button ----------
@@ -195,21 +192,26 @@ export function watchKeyboard() {
 
 // ---------- small persistent preferences (device storage when Telegram offers it) ----------
 const mem = new Map();
+// Device storage only accepts letters, digits, underscore and dash in a key, and some Telegram versions never answer at all,
+// so every read has a short deadline: a missing answer must never keep the app from opening.
+const safeKey = (k) => String(k).replace(/[^A-Za-z0-9_-]/g, '_');
 export const prefs = {
   get(key) {
     return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(mem.get(key) ?? null), 1200);
+      const done = (v) => { clearTimeout(timer); resolve(v); };
       try {
-        if (tg && atLeast('9.0') && tg.DeviceStorage) return tg.DeviceStorage.getItem(key, (err, v) => resolve(err ? mem.get(key) ?? null : v ?? null));
-        resolve(localStorage.getItem(key));
+        if (tg && atLeast('9.0') && tg.DeviceStorage) return tg.DeviceStorage.getItem(safeKey(key), (err, v) => done(err ? mem.get(key) ?? null : v ?? null));
+        done(localStorage.getItem(key));
       } catch {
-        resolve(mem.get(key) ?? null);
+        done(mem.get(key) ?? null);
       }
     });
   },
   set(key, value) {
     mem.set(key, value);
     try {
-      if (tg && atLeast('9.0') && tg.DeviceStorage) tg.DeviceStorage.setItem(key, value);
+      if (tg && atLeast('9.0') && tg.DeviceStorage) tg.DeviceStorage.setItem(safeKey(key), value);
       else localStorage.setItem(key, value);
     } catch { /* storage unavailable: the in-memory value still works for this session */ }
   },

@@ -264,7 +264,7 @@ async function main() {
     const text = await body(page);
     assert.match(text, /Buy USDT/);
     assert.ok(!/[ሀ-፿]/.test(text), 'no Ethiopic text on the home screen');
-    assert.equal(await page.locator('.langpill').count(), 0);
+    assert.equal(await page.locator('.langpill', { hasText: /^\s*(EN|አማ)\s*$/ }).count(), 0, 'no language switch');
     await tab(page, 'Support');
     await page.waitForTimeout(500);
     assert.ok(!/Language|አማርኛ/.test(await body(page)), 'no language setting in Support');

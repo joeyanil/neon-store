@@ -32,7 +32,9 @@ export async function readJson(request, maxBytes = 16_384) {
   try {
     const text = await request.text();
     if (text.length > maxBytes) throw new ApiError(413, 'too_large', 'Request is too large');
-    return text ? JSON.parse(text) : {};
+    const value = text ? JSON.parse(text) : {};
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(400, 'bad_json', 'Request body must be a JSON object');
+    return value;
   } catch (e) {
     if (e instanceof ApiError) throw e;
     throw new ApiError(400, 'bad_json', 'Request body is not valid JSON');

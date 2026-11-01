@@ -545,6 +545,15 @@ export async function handleChatInput(env, tg, msg) {
   return false;
 }
 
+/** Anything the bot did not understand in a private chat gets the menu with a short note, never silence. */
+export async function handleChatFallback(env, tg, msg, note) {
+  if (msg.chat.type !== 'private' || !msg.from || msg.from.is_bot) return false;
+  const ctx = await makeCtx(env, tg, msg.from, msg.chat.id);
+  ctx.msgId = null;
+  await showMenu(ctx, note);
+  return true;
+}
+
 /** /start and friends. */
 export async function handleChatCommand(env, tg, msg, cmd) {
   if (msg.chat.type !== 'private') return false;

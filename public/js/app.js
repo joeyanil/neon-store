@@ -153,8 +153,7 @@ async function start() {
   try {
     const boot = await api.bootstrap();
     S.boot = boot;
-    const saved = await TG.prefs.get('neon.lang');
-    S.lang = 'en'; // English only for now; saved language preferences are ignored
+        S.lang = 'en'; // English only for now; saved language preferences are ignored
     setLang(S.lang);
     const deep = deepLink();
     if (deep) replace(deep, { root: true });
@@ -218,4 +217,16 @@ async function main() {
   });
   await start();
 }
-main();
+// Whatever goes wrong, the person sees a message and a retry button, never an empty screen.
+function showCrash(err) {
+  console.error(err);
+  try {
+    app.replaceChildren(h('div', { class: 'screen' }, h('div', { class: 'clay stack', role: 'alert' },
+      h('div', { class: 'notice warn' }, icon('alert', 20), 'The app could not start.'),
+      h('p', { class: 'muted' }, String(err?.message || err || 'Unknown problem').slice(0, 200)),
+      h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again'))));
+  } catch { /* nothing more to do */ }
+}
+addEventListener('error', (e) => { if (!app.firstChild || app.querySelector('.splash')) showCrash(e.error || e.message); });
+addEventListener('unhandledrejection', (e) => { if (!app.firstChild || app.querySelector('.splash')) showCrash(e.reason); });
+main().catch(showCrash);
