@@ -15,7 +15,8 @@
     "test:ui": "node test/ui.test.mjs",
     "test:demo": "node test/demo.test.mjs",
     "test:startup": "node test/startup.test.mjs",
-    "test:matrix": "node test/matrix.mjs"
+    "test:matrix": "node test/matrix.mjs",
+    "test:robust": "node test/robust.test.mjs"
   },
   "devDependencies": {
     "@fontsource/figtree": "^5.0.0",

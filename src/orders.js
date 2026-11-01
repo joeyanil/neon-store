@@ -302,7 +302,7 @@ export async function patchOrder(db, orderId, set, now = nowSec()) {
 }
 
 /** Orders still waiting for the customer after their time ran out. */
-export async function findExpired(db, now = nowSec(), limit = 100) {
+export async function findExpired(db, now = nowSec(), limit = 6) {
   const { results } = await db
     .prepare("SELECT id, user_id FROM orders WHERE status = 'awaiting_payment' AND expires_at <= ? ORDER BY expires_at LIMIT ?")
     .bind(now, limit)

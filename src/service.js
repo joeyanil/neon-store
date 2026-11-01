@@ -191,7 +191,7 @@ export async function expireStaleOrders(env, tg, now = nowSec()) {
 }
 
 /** Orders whose alert never reached anyone (Telegram down, admin had not started the bot) are tried again. */
-export async function retryAlerts(env, tg, limit = 20) {
+export async function retryAlerts(env, tg, limit = 4) {
   const { results } = await env.DB
     .prepare("SELECT id FROM orders WHERE status = 'evidence_submitted' AND alerted_at IS NULL ORDER BY updated_at LIMIT ?")
     .bind(limit)

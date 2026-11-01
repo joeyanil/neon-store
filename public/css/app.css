@@ -204,6 +204,7 @@ body.in-tg .backbtn { display: none; }
 .chip:active { box-shadow: var(--pressed); }
 
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 5px; border-radius: 20px; background: var(--bg); box-shadow: var(--inset); }
+.seg.wrap { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); }
 .seg button { min-height: 44px; border-radius: 16px; font-weight: 600; font-size: 14.5px; color: var(--mut); padding: 0 8px; transition: all .18s var(--ease); }
 .seg button[aria-pressed='true'], .seg button[aria-checked='true'] { background: var(--bg); color: var(--ink); box-shadow: var(--raise-sm); }
 

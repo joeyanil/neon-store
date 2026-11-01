@@ -41,7 +41,7 @@ export function textArea({ label, value = '', placeholder = '', hint = '', rows 
 /** A segmented choice: options = [[value, label], ...]. */
 export function segField({ label, options, value, onChange }) {
   let current = value;
-  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': label },
+  const seg = h('div', { class: options.length > 3 ? 'seg wrap' : 'seg', role: 'group', 'aria-label': label },
     options.map(([v, text]) => h('button', {
       type: 'button', 'data-v': v, 'aria-pressed': String(v === current),
       onclick: () => { haptic.select(); current = v; paint(); onChange?.(v); },
