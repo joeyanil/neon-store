@@ -11,12 +11,12 @@ let chromium;
 try { ({ chromium } = await import('playwright')); } catch { ({ chromium } = require('playwright')); }
 const MOCK = readFileSync(new URL('./tg-mock.js', import.meta.url), 'utf8');
 
-async function open(browser, tweak, { user = ALICE, block } = {}) {
+async function open(browser, tweak, { user = ALICE, block, tgScript = '' } = {}) {
   const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await c.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.route('https://telegram.org/**', (r) => r.fulfill({ contentType: 'application/javascript', body: '' }));
+  await page.route('https://telegram.org/**', (r) => r.fulfill({ contentType: 'application/javascript', body: tgScript }));
   if (block) await page.route(block, (r) => r.abort());
   await page.addInitScript(`window.__INIT = ${JSON.stringify({ initData: signInitData(BOT_TOKEN, user), user, scheme: 'light' })};`);
   await page.addInitScript(MOCK);
@@ -47,6 +47,21 @@ async function main() {
   await step('buttons that throw (older or newer Telegram clients) do not blank the app', async () => {
     const { page } = await open(browser, 'const W = window.Telegram.WebApp; W.BackButton.show = () => { throw new Error("x") }; W.BackButton.hide = () => { throw new Error("x") }; W.setHeaderColor = () => { throw new Error("x") };');
     await ready(page, 5000);
+  });
+  await step('an error thrown inside Telegram\'s own script (like "Cannot read property postMessage of undefined") does not stop the app', async () => {
+    const script = "setTimeout(function () { throw new TypeError(\"Cannot read property 'postMessage' of undefined\"); }, 30); setTimeout(function () { Promise.reject(new Error('telegram async')); }, 60);";
+    const { page } = await open(browser, null, { tgScript: script });
+    await ready(page, 6000);
+    await page.waitForTimeout(500);
+    assert.match(await page.locator('body').innerText(), /Buy USDT|Sell USDT/i);
+    assert.equal(await page.getByText('could not start').count(), 0);
+  });
+  await step('native buttons that throw on every call fall back to the app\'s own bottom bar', async () => {
+    const { page } = await open(browser, 'const W = window.Telegram.WebApp; for (const k of ["MainButton", "SecondaryButton"]) for (const m of ["setParams", "show", "hide", "showProgress", "hideProgress", "onClick", "offClick"]) W[k][m] = () => { throw new Error("no " + m); };');
+    await ready(page, 6000);
+    await page.evaluate(() => { history.pushState({ app: true, path: '/trade/buy', depth: 1 }, ''); dispatchEvent(new PopStateEvent('popstate', { state: history.state })); });
+    await page.waitForTimeout(400);
+    assert.ok(await page.locator('.actionbar button').count() >= 1, 'the app\'s own button bar is used');
   });
   await step('an old phone (Android WebView 80: no replaceChildren, replaceAll, at; no flex gap) opens and works', async () => {
     const OLD = 'for (const P of [Element, Document, DocumentFragment]) delete P.prototype.replaceChildren; delete String.prototype.replaceAll; delete Array.prototype.at;';

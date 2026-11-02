@@ -46,11 +46,11 @@ export function applyTheme(pref) {
 }
 
 export function onThemeChanged(cb) {
-  tg?.onEvent('themeChanged', cb);
+  safe(() => tg?.onEvent('themeChanged', cb));
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', cb);
 }
 export function onActivated(cb) {
-  tg?.onEvent('activated', cb);
+  safe(() => tg?.onEvent('activated', cb));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cb(); });
 }
 
@@ -95,7 +95,13 @@ function colors() {
  * @param {{text: string, onClick: Function} | null} [secondary]
  */
 export function setActions(main, secondary = null) {
-  if (usesNativeButtons()) {
+  // If this Telegram version fails on its native buttons, fall through to the app's own bottom bar.
+  if (usesNativeButtons() && safe(() => { setNativeActions(main, secondary); return true; })) return;
+  setBarActions(main, secondary);
+}
+
+function setNativeActions(main, secondary) {
+  {
     const mb = tg.MainButton;
     if (mainCb) { mb.offClick(mainCb); mainCb = null; }
     if (!main) {
@@ -118,8 +124,10 @@ export function setActions(main, secondary = null) {
         sb.onClick(secondaryCb);
       }
     }
-    return;
   }
+}
+
+function setBarActions(main, secondary) {
   if (!fallbackBar) return;
   fallbackBar.replaceChildren();
   fallbackBar.hidden = !main && !secondary;
@@ -144,12 +152,14 @@ export function setActions(main, secondary = null) {
 // ---------- dialogs and links ----------
 export function confirmDialog(message) {
   return new Promise((resolve) => {
-    if (tg && atLeast('6.2')) tg.showConfirm(message, (ok) => resolve(Boolean(ok)));
-    else resolve(window.confirm(message));
+    try {
+      if (tg && atLeast('6.2')) tg.showConfirm(message, (ok) => resolve(Boolean(ok)));
+      else resolve(window.confirm(message));
+    } catch { resolve(window.confirm(message)); }
   });
 }
 export function openTelegramLink(url) {
-  if (tg) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener');
+  try { if (tg) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener'); } catch { window.open(url, '_blank', 'noopener'); }
 }
 export function setClosingConfirmation(on) {
   if (!tg) return;
@@ -157,11 +167,13 @@ export function setClosingConfirmation(on) {
 }
 export function requestWriteAccess() {
   return new Promise((resolve) => {
-    if (tg && atLeast('6.9')) tg.requestWriteAccess((ok) => resolve(Boolean(ok)));
-    else resolve(false);
+    try {
+      if (tg && atLeast('6.9')) tg.requestWriteAccess((ok) => resolve(Boolean(ok)));
+      else resolve(false);
+    } catch { resolve(false); }
   });
 }
-export const closeApp = () => (tg ? tg.close() : window.close());
+export const closeApp = () => safe(() => (tg ? tg.close() : window.close()));
 
 // ---------- keyboard: hide the floating nav while typing so it never covers a field ----------
 // Android does not blur a field when the keyboard is dismissed, so the nav also comes back when the visible

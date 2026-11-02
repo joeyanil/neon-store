@@ -224,10 +224,18 @@ function showCrash(err) {
   try {
     app.replaceChildren(h('div', { class: 'screen' }, h('div', { class: 'clay stack', role: 'alert' },
       h('div', { class: 'notice warn' }, icon('alert', 20), 'The app could not start.'),
-      h('p', { class: 'muted' }, String(err?.message || err || 'Unknown problem').slice(0, 200)),
+      h('p', { class: 'muted' }, String(err?.message || err || 'Unknown problem').slice(0, 200), err?.stack ? ` [${String(err.stack).split('\n').slice(1, 3).map((l) => l.trim().replace(location.origin, '').replace(/^at /, '')).join(' < ').slice(0, 160)}]` : ''),
       h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Try again'))));
   } catch { /* nothing more to do */ }
 }
-addEventListener('error', (e) => { if (!app.firstChild || app.querySelector('.splash')) showCrash(e.error || e.message); });
-addEventListener('unhandledrejection', (e) => { if (!app.firstChild || app.querySelector('.splash')) showCrash(e.reason); });
+// Only the app's own errors count. Telegram's script (another website, so its errors arrive as an anonymous "Script error."
+// with no file name) must never stop the app: it has its own handling and the app works without its answers.
+const starting = () => !app.firstChild || app.querySelector('.splash');
+addEventListener('error', (e) => {
+  if (!e.filename || !String(e.filename).startsWith(location.origin) || !starting()) return;
+  showCrash(`${e.message} (${String(e.filename).replace(location.origin, '')}:${e.lineno})`);
+});
+addEventListener('unhandledrejection', (e) => {
+  if (starting() && (e.reason instanceof ApiError || String(e.reason?.stack || '').includes(location.origin))) showCrash(e.reason);
+});
 main().catch(showCrash);

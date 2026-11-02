@@ -812,7 +812,7 @@ async function main() {
     const buy = buttons(ALICE).find((b) => b.callback_data === 'c:buy');
     const sell = buttons(ALICE).find((b) => b.callback_data === 'c:sell');
     assert.equal(buy.style, 'success');
-    assert.equal(sell.style, 'primary');
+    assert.equal(sell.style, 'danger');
     assert.ok(buttons(ALICE).some((b) => b.web_app?.url), 'open app button');
     assert.ok(!buttons(ALICE).some((b) => b.callback_data === 'a:home'), 'no admin button for customers');
   });
@@ -983,9 +983,11 @@ async function main() {
     await tap(ALICE, 'c:home');
     const style = (data) => buttons(ALICE).find((b) => b.callback_data === data)?.style;
     assert.equal(style('c:buy'), 'success');
-    assert.equal(style('c:sell'), 'primary');
+    assert.equal(style('c:sell'), 'danger', 'sell is red');
     assert.equal(style('c:svc'), 'primary');
-    assert.equal(style('c:rates'), undefined, 'secondary buttons stay grey');
+    assert.equal(style('c:rates'), 'primary');
+    assert.equal(style('c:sup'), undefined, 'support is grey');
+    assert.equal(style('c:ol:active:0'), undefined, 'my orders is grey');
     await tap(ALICE, 'c:buy');
     assert.equal(style('c:x'), 'danger', 'cancel is red');
     assert.equal(style('c:back'), 'primary', 'back is blue');

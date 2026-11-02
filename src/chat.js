@@ -40,13 +40,13 @@ export async function showMenu(ctx, note = '') {
   await clearSession(ctx);
   const b = ctx.s.btn;
   const rows = [
-    [btn(b.buy, 'c:buy', G), btn(b.sell, 'c:sell', P)],
-    [btn(b.services, 'c:svc', P), btn(b.rates, 'c:rates', W)],
-    [btn(b.orders, 'c:ol:active:0', W), btn(b.support, 'c:sup', P)],
+    [btn(b.buy, 'c:buy', G), btn(b.sell, 'c:sell', R)],
+    [btn(b.services, 'c:svc', P), btn(b.rates, 'c:rates', P)],
+    [btn(b.orders, 'c:ol:active:0', W), btn(b.support, 'c:sup', W)],
     [btn(b.policies, 'c:pol', W)],
   ];
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
-  if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, P)]);
+  if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, G)]);
   return show(ctx, `<b>${ctx.s.menuTitle}</b>\n${ctx.s.menuIntro}${note ? `\n\n${note}` : ''}`, rows);
 }
 
@@ -57,7 +57,7 @@ async function showRates(ctx) {
   const st = await stockInfo(ctx.db, settings);
   const rows = [];
   if (avail.buy) rows.push(btn(ctx.s.btn.buyNow, 'c:buy', G));
-  if (avail.sell) rows.push(btn(ctx.s.btn.sellNow, 'c:sell', P));
+  if (avail.sell) rows.push(btn(ctx.s.btn.sellNow, 'c:sell', R));
   const text = settings.max_usdt_micro > 0 && settings.buy_rate_cents > 0
     ? ctx.s.rateCard({ buy: settings.buy_rate_cents, sell: settings.sell_rate_cents, min: settings.min_usdt_micro, max: settings.max_usdt_micro, stock: st.tracking && st.show ? st.available : null, updated: ctx.s.ago(nowSec() - settings.rate_updated_at) })
     : ctx.s.shopClosed;
