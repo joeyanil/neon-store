@@ -5,13 +5,14 @@
 // Telegram at this same Worker, and the secret Telegram uses is derived from the bot token (see secret.js).
 // The cron job runs the same repair every 5 minutes, so a redeploy can never leave the bot silent for long.
 import { setSetting } from './orders.js';
+import { VERSION } from './version.js';
 import { webhookSecret } from './secret.js';
 import { Telegram, TelegramError, esc } from './telegram.js';
 
 const PAGE = (body) => new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Telegram</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px 16px;background:#e9efff;color:#0d1424}
 button{font:inherit;width:100%;box-sizing:border-box;padding:14px;border-radius:14px;border:0;margin:12px 0;background:#0a62d0;color:#fff;font-weight:600}.ok{color:#0a7d3c}.bad{color:#b3261e}.warn{color:#8a5a00}code{background:#fff;padding:2px 6px;border-radius:6px;word-break:break-all}li{margin:6px 0}</style></head>
-<body><h1>Connect Telegram</h1>${body}</body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
+<body><h1>Connect Telegram</h1>${body}<p style="opacity:.6;font-size:13px">Version ${VERSION}</p></body></html>`, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
 
 const COMMANDS = [
   { command: 'start', description: 'Main menu' }, { command: 'buy', description: 'Buy USDT' }, { command: 'sell', description: 'Sell USDT' },

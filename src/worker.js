@@ -2,6 +2,7 @@ import { handleApi } from './api.js';
 import { ensureWebhook, handleConnect } from './connect.js';
 import { webhookSecret } from './secret.js';
 import { json } from './http.js';
+import { VERSION } from './version.js';
 import { purgeOldProofs } from './proofs.js';
 import { expireStaleOrders, handleUpdate, retryAlerts } from './service.js';
 import { Telegram } from './telegram.js';
@@ -42,7 +43,7 @@ export default {
     }
 
     if (url.pathname.startsWith('/api/')) return handleApi(request, env, tg);
-    if (url.pathname === '/health') return json({ ok: true });
+    if (url.pathname === '/health') return json({ ok: true, version: VERSION });
 
     return env.ASSETS ? env.ASSETS.fetch(request) : new Response('not found', { status: 404 });
   },

@@ -9,6 +9,7 @@ import { cancelOrder, submitEvidence } from './service.js';
 import { listPolicies } from './shop-admin.js';
 import { createTicket, customerReply, getTicket, isTicketId, listTickets, threadOf } from './tickets.js';
 import { BTN_ADMIN, handleAdminCallback, handleAdminInput } from './chat-admin.js';
+import { VERSION } from './version.js';
 import { G, P, R, W, btn, clearSession, grid, homeRow, makeCtx, newIdem, progress, saveSession, show, tidy } from './chat-core.js';
 import { etb, usdt } from './chat-text.js';
 import { esc } from './telegram.js';
@@ -47,7 +48,8 @@ export async function showMenu(ctx, note = '') {
   ];
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
   if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, G)]);
-  return show(ctx, `<b>${ctx.s.menuTitle}</b>\n${ctx.s.menuIntro}${note ? `\n\n${note}` : ''}`, rows);
+  const stamp = ctx.role ? `\n\n<i>Version ${VERSION}</i>` : ''; // only the team sees which build is live
+  return show(ctx, `<b>${ctx.s.menuTitle}</b>\n${ctx.s.menuIntro}${note ? `\n\n${note}` : ''}${stamp}`, rows);
 }
 
 // ---------- rates ----------

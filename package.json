@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "ship": "wrangler deploy && wrangler d1 migrations apply neon-p2p --remote && wrangler d1 execute neon-p2p --remote --file=scripts/demo-data.sql",
+    "ship": "node scripts/stamp-version.mjs && wrangler deploy && wrangler d1 migrations apply neon-p2p --remote && wrangler d1 execute neon-p2p --remote --file=scripts/demo-data.sql",
     "db:local": "wrangler d1 migrations apply neon-p2p --local",
     "db:remote": "wrangler d1 migrations apply neon-p2p --remote",
     "test": "node --test test/unit.test.js",
