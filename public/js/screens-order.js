@@ -53,7 +53,7 @@ export function orderScreen(ctx) {
   const updateCount = () => {
     // keep the Orders tab badge honest without another request
     if (order && !isOpen(order.status) && S.activeCount > 0 && ctx.openIds?.has(order.id)) { S.activeCount -= 1; ctx.openIds.delete(order.id); ctx.updateNav(); }
-    if (order && isOpen(order.status)) { ctx.openIds ??= new Set(); ctx.openIds.add(order.id); }
+    if (order && isOpen(order.status)) { ctx.openIds = ctx.openIds || new Set(); ctx.openIds.add(order.id); }
   };
 
   // ----- pieces -----
@@ -209,7 +209,7 @@ export function orderScreen(ctx) {
       text = ''; file = null; showMore = false;
       if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
       toast(t('receipt_sent'), 'ok');
-      ctx.openIds ??= new Set(); ctx.openIds.add(order.id);
+      ctx.openIds = ctx.openIds || new Set(); ctx.openIds.add(order.id);
     } catch (err) {
       toast(errorText(err), 'error');
       if (err.code === 'expired' || err.code === 'not_open') await load();

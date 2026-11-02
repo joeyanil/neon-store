@@ -1,4 +1,5 @@
 // Starts the app: Telegram setup, login, routing, bottom navigation.
+import './compat.js';
 import { admin, api, ApiError } from './api.js';
 import { S } from './components.js';
 import { errorText, setLang, t } from './i18n.js';

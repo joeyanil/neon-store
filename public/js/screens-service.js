@@ -17,7 +17,7 @@ const fmt = (n) => Number(n).toLocaleString('en-US');
 export function servicesScreen(ctx) {
   const { boot } = S;
   const groups = {};
-  for (const s of boot.catalog.services) (groups[s.platform] ||= []).push(s);
+  for (const s of boot.catalog.services) (groups[s.platform] = groups[s.platform] || []).push(s);
   const body = Object.keys(groups).length
     ? Object.entries(groups).map(([p, list]) => h('section', { class: 'stack' },
       h('h2', { class: 'section-title' }, PLATFORM_NAME[p] || p),
@@ -30,8 +30,8 @@ export function serviceScreen(ctx) {
   const { boot } = S;
   const svc = boot.catalog.services.find((s) => s.code === ctx.params.code);
   if (!svc) { queueMicrotask(() => ctx.replace('/services', { root: true })); return { el: h('div') }; }
-  S.drafts.service ||= {};
-  const d = (S.drafts.service[svc.code] ||= { qty: '', target: '', method: null });
+  S.drafts.service = S.drafts.service || {};
+  const d = S.drafts.service[svc.code] || (S.drafts.service[svc.code] = { qty: '', target: '', method: null });
   const methods = boot.catalog.methods.filter((m) => m.buy);
   const open = (m) => !lockInfo(m, boot.stats);
   if (!methods.some((m) => m.code === d.method && open(m))) d.method = (methods.find(open) || methods[0])?.code;
@@ -107,7 +107,7 @@ function review(ctx, svc, d, methods) {
     if (busy) return;
     busy = true;
     setActions({ text: t('creating'), loading: true, onClick() {} });
-    d.idem ||= newIdemKey();
+    d.idem = d.idem || newIdemKey();
     try {
       const { order } = await api.createOrder({ side: 'service', service: svc.code, quantity: c.qty, target: d.target, method: d.method, idem: d.idem });
       delete S.drafts.service[svc.code];

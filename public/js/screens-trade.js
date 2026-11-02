@@ -71,7 +71,7 @@ export function tradeScreen(ctx) {
   const nets = sideList(boot.catalog.networks, side);
   if (!methods.some((m) => m.code === d.method && !(side === 'buy' && lockInfo(m, boot.stats)))) d.method = (methods.find((m) => !(side === 'buy' && lockInfo(m, boot.stats))) || methods[0])?.code;
   if (!nets.some((n) => n.code === d.network)) d.network = nets[0]?.code;
-  d.usdt ??= ''; d.address ??= ''; d.name ??= ''; d.account ??= '';
+  for (const k of ['usdt', 'address', 'name', 'account']) if (d[k] == null) d[k] = '';
   return ctx.params.step === 'review' ? reviewScreen(ctx, side, d) : formScreen(ctx, side, d);
 }
 
@@ -215,7 +215,7 @@ function reviewScreen(ctx, side, d) {
     if (busy) return;
     busy = true;
     setActions({ text: t('creating'), loading: true, onClick() {} });
-    d.idem ||= newIdemKey();
+    d.idem = d.idem || newIdemKey();
     const body = side === 'buy'
       ? { side, usdt: d.usdt, method: d.method, network: d.network, address: d.address, idem: d.idem }
       : { side, usdt: d.usdt, method: d.method, network: d.network, payout_name: d.name, payout_account: d.account, idem: d.idem };

@@ -155,3 +155,36 @@ test('service totals round up so the shop never undercharges', () => {
   assert.equal(serviceTotal(1500, 8550), 12825);
   assert.equal(serviceTotal(1, 8550), 9); // 8.55 cents -> 9
 });
+
+// The Mini App must run on old phones (Android WebView 80, from 2020). These features arrived later and would stop the
+// whole app from starting, so they must not be used directly. public/js/compat.js fills in the few that are needed.
+import { readdirSync, readFileSync } from 'node:fs';
+test('Mini App code uses nothing newer than Chrome 80 (or has a fill-in in compat.js)', () => {
+  const banned = [
+    [/\?\?=|\|\|=|&&=/, 'logical assignment (Chrome 85)'], [/\.replaceAll\(/, 'replaceAll (85)'], [/\.at\(-?\d/, 'Array/String.at (92)'], [/structuredClone/, 'structuredClone (98)'],
+    [/Object\.hasOwn\(/, 'Object.hasOwn (93)'], [/\.findLast(Index)?\(/, 'findLast (97)'], [/Promise\.any/, 'Promise.any (85)'], [/\.toSorted\(|\.toReversed\(/, 'toSorted (110)'],
+    [/randomUUID/, 'crypto.randomUUID (92)'], [/AbortSignal\.(timeout|any)/, 'AbortSignal.timeout (124)'], [/\bstatic\s*\{|#[a-z_]\w*\s*\(/i, 'private methods / static blocks (84+)'], [/await\s+import\(/, 'top-level await style import'],
+  ];
+  const problems = [];
+  for (const f of readdirSync('public/js')) {
+    if (f === 'compat.js' || !f.endsWith('.js')) continue;
+    const text = readFileSync(`public/js/${f}`, 'utf8').replace(/\/\/.*$/gm, '');
+    for (const [re, why] of banned) if (re.test(text)) problems.push(`${f}: ${why}`);
+    if (/^await\s/m.test(text)) problems.push(`${f}: top-level await (89)`);
+  }
+  const css = readFileSync('public/css/app.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  if (/[{;\s]inset\s*:\s*[^i]/.test(css.replace(/box-shadow[^;]*;/g, '').replace(/--[\w-]+:[^;]*;/g, ''))) problems.push('app.css: "inset:" shorthand (87)');
+  if (/[{;\s]aspect-ratio/.test(css) && !/@supports not \(aspect-ratio/.test(css)) problems.push('app.css: aspect-ratio without a fallback (88)');
+  assert.deepEqual(problems, []);
+});
+test('compat.css covers every flex container that relies on gap', () => {
+  const css = readFileSync('public/css/app.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const compat = readFileSync('public/css/compat.css', 'utf8');
+  const missing = [];
+  for (const m of css.matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+    const gap = /(?:^|[;\s])gap:\s*([^;]+)/.exec(m[2])?.[1].trim().split(/\s+/)[0];
+    if (!gap || /^0(px)?$/.test(gap) || !/display:\s*(inline-flex|flex)\b/.test(m[2])) continue;
+    for (const sel of m[1].split(',')) if (!compat.includes(`html.no-fg ${sel.trim()} >`)) missing.push(sel.trim());
+  }
+  assert.deepEqual(missing, [], 'run: node scripts/gen-compat-css.mjs');
+});

@@ -48,6 +48,21 @@ async function main() {
     const { page } = await open(browser, 'const W = window.Telegram.WebApp; W.BackButton.show = () => { throw new Error("x") }; W.BackButton.hide = () => { throw new Error("x") }; W.setHeaderColor = () => { throw new Error("x") };');
     await ready(page, 5000);
   });
+  await step('an old phone (Android WebView 80: no replaceChildren, replaceAll, at; no flex gap) opens and works', async () => {
+    const OLD = 'for (const P of [Element, Document, DocumentFragment]) delete P.prototype.replaceChildren; delete String.prototype.replaceAll; delete Array.prototype.at;';
+    const { page, errors } = await open(browser, OLD);
+    await ready(page, 6000);
+    assert.match(await page.locator('body').innerText(), /Buy USDT/i);
+    // Pretend flex gap is missing and check the margin-based spacing keeps screens apart and inside the width.
+    await page.evaluate(() => document.documentElement.classList.add('no-fg'));
+    for (const route of ['/', '/trade/buy', '/services', '/orders', '/support']) {
+      await page.evaluate((r) => { history.pushState({ app: true, path: r, depth: 1 }, ''); dispatchEvent(new PopStateEvent('popstate', { state: history.state })); }, route);
+      await page.waitForTimeout(300);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${route} overflows without flex gap`);
+    }
+    await page.screenshot({ path: '/tmp/old-phone.png' });
+    assert.deepEqual(errors, []);
+  });
   await step('an Amharic-language phone and a user with no username open the app', async () => {
     const { page } = await open(browser, null, { user: { id: 424999, first_name: 'ሰላም', language_code: 'am' } });
     await ready(page);
