@@ -45,6 +45,7 @@ export function settingsHubScreen(ctx) {
       row('book', 'Rules and policies', `${policies.sections.length} sections customers can read`, '/admin/policies'),
       row('shield', 'Team', 'Owners and staff', '/admin/team'),
       row('support', 'Alerts', setup.alerts.tested ? (setup.alerts.mode === 'dm' ? 'Private messages to each admin' : 'Sent to a group chat') : 'Not tested yet', '/admin/alerts'),
+      S.boot.role === 'owner' ? row('globe', 'Button emoji', 'Premium emoji on the chat bot buttons', '/admin/emoji') : null,
       row('clock', 'Activity log', 'Who changed what', '/admin/audit'),
     ];
     return h('div', { class: 'stack' }, ...rows);
@@ -337,6 +338,27 @@ export function alertsScreen(ctx) {
     card(title('Use a group chat'), h('p', { class: 'muted small' }, 'Add the bot to a group of people you trust, then send /alerts in that group. Anyone in the group sees order details.')));
   admin.alerts().then(paint).catch((err) => box.replaceChildren(h('div', { class: 'notice warn' }, errorText(err))));
   return { el: root };
+}
+
+// ---------- premium emoji on the chat bot's buttons ----------
+export function buttonEmojiScreen(ctx) {
+  const root = h('div', { class: 'screen flow' }, flowTop(ctx, 'Button emoji'));
+  let save;
+  loading(root, async () => {
+    const { items, map } = await admin.buttonEmoji();
+    const norm = (e) => e.replace(/\uFE0F/g, '');
+    const f = Object.fromEntries(items.map((it) => [it.emoji, textField({ label: `${it.emoji}  ${it.example}`, value: map[norm(it.emoji)] || '', inputMode: 'numeric', placeholder: 'Premium emoji ID (optional)' })]));
+    save = async () => {
+      const body = Object.fromEntries(Object.entries(f).map(([e, field]) => [e, field.get()]));
+      const res = await submit(f, () => admin.saveButtonEmoji(body));
+      if (res) toast('Saved. Open the bot menu again to see it.', 'ok');
+    };
+    return h('div', { class: 'stack' },
+      card(title('Premium emoji'), h('p', { class: 'muted small' }, 'Works when the bot\'s owner has Telegram Premium. To get an ID: send a premium emoji to the bot in a private chat and it replies with the ID. Paste it next to the ordinary emoji it should replace. Leave a box empty to keep the ordinary emoji. If Telegram refuses an ID, the bot quietly uses the ordinary emoji.')),
+      card(...Object.values(f).map((x) => x.el)));
+  });
+  setActions({ text: 'Save', onClick: () => save?.() });
+  return { el: root, destroy: () => setActions(null) };
 }
 
 // ---------- activity ----------

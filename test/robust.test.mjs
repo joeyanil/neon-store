@@ -66,7 +66,7 @@ async function main() {
     const bad = [];
     for (const [user, scheme, routes] of [
       [ALICE, 'light', ['/', '/rates', '/orders', '/support', '/policies', '/services', '/trade/buy', '/trade/sell', '/ticket/new']],
-      [ADMIN, 'dark', ['/admin', '/admin/setup', '/admin/rates', '/admin/methods', '/admin/method/new', '/admin/networks', '/admin/network/new', '/admin/services', '/admin/service/new', '/admin/policies', '/admin/team', '/admin/alerts', '/admin/audit', '/admin/tickets', '/admin/settings']],
+      [ADMIN, 'dark', ['/admin', '/admin/setup', '/admin/rates', '/admin/methods', '/admin/method/new', '/admin/networks', '/admin/network/new', '/admin/services', '/admin/service/new', '/admin/policies', '/admin/team', '/admin/alerts', '/admin/emoji', '/admin/audit', '/admin/tickets', '/admin/settings']],
     ]) {
       const { page } = await open(browser, { user, width: 320, scheme });
       await page.locator('.nav a').first().waitFor();

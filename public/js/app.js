@@ -52,6 +52,7 @@ const ROUTES = [
   { re: new RegExp(`^/admin/policy/${CODE}$`), screen: AS.policyFormScreen, params: (m) => ({ code: m[1] }) },
   { re: /^\/admin\/team$/, screen: AS.teamScreen },
   { re: /^\/admin\/alerts$/, screen: AS.alertsScreen },
+  { re: /^\/admin\/emoji$/, screen: AS.buttonEmojiScreen },
   { re: /^\/admin\/audit$/, screen: AS.auditScreen },
   { re: /^\/trade\/(buy|sell)$/, screen: tradeScreen, params: (m) => ({ side: m[1] }) },
   { re: /^\/trade\/(buy|sell)\/review$/, screen: tradeScreen, params: (m) => ({ side: m[1], step: 'review' }) },
@@ -94,6 +95,11 @@ function show(path) {
     ctx.params = r.params ? r.params(m) : {};
     const screen = r.screen(ctx);
     current = { screen, path, tab: Boolean(r.tab) };
+    // Every screen except the five tabs gets a visible Back button, even where the screen forgot to add its own.
+    // (Telegram's own back arrow is missing or hidden on some phones.)
+    if (!r.tab && !screen.el.querySelector('.backbtn')) {
+      screen.el.prepend(h('button', { class: 'backrow', type: 'button', onclick: back, 'aria-label': t('back') }, icon('back', 20), t('back')));
+    }
     app.replaceChildren(screen.el);
     window.scrollTo(0, 0);
     nav.classList.toggle('hide', !r.tab);

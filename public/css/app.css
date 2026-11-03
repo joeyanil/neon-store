@@ -128,7 +128,6 @@ svg { display: block; }
 .top .sub { color: var(--mut); font-size: 14px; margin-top: 2px; }
 .backbtn { width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; background: var(--bg); box-shadow: var(--raise-sm); flex: none; }
 .backbtn:active { box-shadow: var(--pressed); }
-body.in-tg .backbtn { display: none; }
 
 /* ---------- clay surfaces ---------- */
 .clay { background: linear-gradient(145deg, var(--hi), var(--bg) 70%); border-radius: 28px; box-shadow: var(--raise); padding: 18px; }
@@ -380,3 +379,9 @@ details.faq p.policy-body { white-space: pre-line; }
 .linklike { color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 
 @supports not (aspect-ratio: 1) { .proofs button { height: 96px; } }
+
+/* A labelled Back button added to every screen that is not a tab. */
+.backrow { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px 0 10px; border-radius: 999px; background: var(--bg); box-shadow: var(--raise-sm); color: var(--ink); font-weight: 600; font-size: 15px; }
+.backrow:active { box-shadow: var(--pressed); }
+html.no-fg .backrow > svg { margin-right: 6px; }
+.lightbox-close { position: absolute; top: calc(var(--sa-top, 0px) + 16px); right: 16px; }

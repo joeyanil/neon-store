@@ -10,6 +10,7 @@ import {
 import { alertTargets, appButton, baseUrl, getUser, orderUrl } from './notify.js';
 import { addProofRow, discardImage, duplicateWarnings, listProofs, storeImage } from './proofs.js';
 import { TelegramError, esc } from './telegram.js';
+import { customEmojiIn } from './emoji.js';
 import { handleChatCallback, handleChatCommand, handleChatFallback, handleChatInput } from './chat.js';
 import { adminClose, adminReply, getTicket } from './tickets.js';
 import { cleanNote } from './validate.js';
@@ -291,6 +292,14 @@ async function handleMessage(env, tg, msg) {
     if (id) return handleReference(env, tg, msg, id, text);
   }
 
+  // The owner sends a premium emoji to the bot and gets its ID back, to paste in Admin > Shop settings > Button emoji.
+  if (role === 'owner' && msg.chat.type === 'private') {
+    const found = customEmojiIn(msg);
+    if (found.length) {
+      const lines = found.slice(0, 20).map((e) => `${e.emoji}  <code>${e.id}</code>`).join('\n');
+      return tg.sendMessage(msg.chat.id, `<b>Premium emoji ID${found.length > 1 ? 's' : ''}</b>\n${lines}\n\nOpen the app: Admin, Shop settings, Button emoji. Paste the ID next to the ordinary emoji it should replace.`);
+    }
+  }
   if (!text.startsWith('/') && (await handleChatInput(env, tg, msg))) return;
   if (!text.startsWith('/')) {
     // A photo or text the bot was not waiting for: show the menu so the person is never left without an answer.

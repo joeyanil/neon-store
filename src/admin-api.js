@@ -3,6 +3,7 @@ import {
   addStaff, adminListOrders, adminOrderDetail, adminSummary, audit, createMethod, createNetwork, deleteMethod, deleteNetwork, listMethodsAdmin, listNetworksAdmin,
   listAudit, listTeam, removeStaff, setBlocked, settingsView, setupStatus, updateMethod, updateNetwork, updateSettings,
 } from './admin.js';
+import { knownEmojis, loadMap, saveMap } from './emoji.js';
 import { ApiError, json, readJson } from './http.js';
 import { getSettings, nowSec, setSetting } from './orders.js';
 import { alertTargets } from './notify.js';
@@ -131,6 +132,9 @@ export async function handleAdmin(request, env, tg, { user, role, path }) {
   if (rest === 'team' && method === 'POST') return json(await addStaff(env, user.id, await body()), 201);
   m = /^team\/(\d+)$/.exec(rest);
   if (m && method === 'DELETE') return json(await removeStaff(env, user.id, Number(m[1])));
+
+  if (rest === 'button-emoji' && method === 'GET') { needOwner(role); return json({ items: knownEmojis(), map: await loadMap(db) }); }
+  if (rest === 'button-emoji' && method === 'PUT') { needOwner(role); const b = await body(); return json({ map: await saveMap(db, user.id, b.map) }); }
 
   if (rest === 'audit' && method === 'GET') return json({ entries: await listAudit(db) });
 

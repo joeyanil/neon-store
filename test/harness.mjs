@@ -34,6 +34,8 @@ export const tgCalls = [];
 let msgId = 1000;
 /** What the fake Telegram currently has registered as the webhook (tests change it to simulate a lost webhook). */
 export const fakeWebhook = { url: '', pending_update_count: 0 };
+/** When true the fake Telegram refuses buttons that carry a custom emoji (an owner without Premium). */
+export const fakeRules = { refuseCustomEmoji: false };
 const fakeTelegram = createServer(async (req, res) => {
   if (req.url.startsWith('/file/')) {
     res.writeHead(200, { 'content-type': 'image/png' });
@@ -63,6 +65,10 @@ const fakeTelegram = createServer(async (req, res) => {
   if (method === 'sendDocument') { const id = ++msgId; result = { message_id: id, document: { file_id: `doc_${id}` } }; }
   if (method === 'sendPhoto') result = { message_id: ++msgId, photo: [{ file_id: 'small' }, { file_id: 'big' }] };
   call.result = result;
+  if (fakeRules.refuseCustomEmoji && JSON.stringify(payload.reply_markup || '').includes('icon_custom_emoji_id')) {
+    res.writeHead(400, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ ok: false, error_code: 400, description: 'Bad Request: DOCUMENT_INVALID' }));
+  }
   if (payload.chat_id === 424242) {
     res.writeHead(403, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ ok: false, description: 'Forbidden: bot was blocked by the user' }));

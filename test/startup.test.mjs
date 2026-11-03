@@ -85,7 +85,7 @@ async function main() {
   await step('the owner opens every admin screen with the demo data and nothing breaks', async () => {
     const { page, errors } = await open(browser, null, { user: ADMIN });
     await ready(page);
-    for (const route of ['/admin', '/admin/setup', '/admin/rates', '/admin/methods', '/admin/networks', '/admin/services', '/admin/policies', '/admin/team', '/admin/alerts', '/admin/audit', '/admin/settings', '/services', '/rates', '/orders', '/support', '/policies', '/trade/buy', '/trade/sell']) {
+    for (const route of ['/admin', '/admin/setup', '/admin/rates', '/admin/methods', '/admin/networks', '/admin/services', '/admin/policies', '/admin/team', '/admin/alerts', '/admin/emoji', '/admin/audit', '/admin/settings', '/services', '/rates', '/orders', '/support', '/policies', '/trade/buy', '/trade/sell']) {
       await page.evaluate((r) => { history.pushState({ app: true, path: r, depth: 1 }, ''); dispatchEvent(new PopStateEvent('popstate', { state: history.state })); }, route);
       await page.waitForTimeout(350);
       const text = await page.locator('body').innerText();
@@ -93,6 +93,26 @@ async function main() {
       assert.ok(!/undefined|\[object|NaN|\bnull\b/.test(text), `${route} shows a raw value: ${text.slice(0, 200)}`);
     }
     assert.deepEqual(errors, []);
+  });
+  await step('every screen that is not a tab has a visible Back button inside Telegram, and it goes back', async () => {
+    const { page } = await open(browser, null, { user: ADMIN });
+    await ready(page);
+    const routes = ['/services', '/service/demo-tg-subs', '/service/demo-tg-subs/review', '/ticket/new', '/policies', '/trade/buy', '/trade/sell', '/trade/buy/review', '/admin/tickets', '/admin/settings', '/admin/setup', '/admin/rates',
+      '/admin/methods', '/admin/method/new', '/admin/networks', '/admin/network/new', '/admin/services', '/admin/service/new', '/admin/policies', '/admin/policy/new', '/admin/team', '/admin/alerts', '/admin/emoji', '/admin/audit'];
+    const missing = [];
+    for (const r of routes) {
+      await page.evaluate(() => { history.replaceState({ app: true, path: '/', depth: 0, root: true }, ''); });
+      await page.evaluate((p) => { history.pushState({ app: true, path: p, depth: 1 }, ''); dispatchEvent(new PopStateEvent('popstate', { state: history.state })); }, r);
+      await page.waitForTimeout(250);
+      const back = page.locator('.backbtn:visible, .backrow:visible').first();
+      if (!(await back.count())) { missing.push(r); continue; }
+    }
+    assert.deepEqual(missing, [], 'screens without a Back button');
+    // And it works: open a ticket form from Support, press Back, land on Support.
+    await page.evaluate(() => { history.replaceState({ app: true, path: '/support', depth: 0, root: true }, ''); dispatchEvent(new PopStateEvent('popstate', { state: history.state })); });
+    await page.getByText('New ticket').first().click();
+    await page.locator('.backbtn:visible, .backrow:visible').first().click();
+    await page.getByText('Chat with support').first().waitFor({ timeout: 3000 });
   });
   await step('when the server is down the person sees a message and a retry button, not a blank screen', async () => {
     const { page } = await open(browser, null, { block: '**/api/bootstrap' });

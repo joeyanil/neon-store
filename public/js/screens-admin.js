@@ -157,7 +157,7 @@ export function adminOrderScreen(ctx) {
   }
 
   function lightbox(src) {
-    const box = h('div', { class: 'lightbox', role: 'dialog', onclick: () => box.remove() }, h('img', { src, alt: 'Proof' }));
+    const box = h('div', { class: 'lightbox', role: 'dialog', onclick: () => box.remove() }, h('img', { src, alt: 'Proof' }), h('button', { class: 'btn primary lightbox-close', type: 'button', onclick: () => box.remove() }, 'Close'));
     document.body.append(box);
   }
 

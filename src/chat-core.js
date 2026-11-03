@@ -4,6 +4,7 @@ import { baseUrl } from './notify.js';
 import { nowSec } from './orders.js';
 import { textFor } from './chat-text.js';
 import { TelegramError } from './telegram.js';
+import { decorate, loadMap } from './emoji.js';
 
 /** A button that sends callback data. `style` is 'primary' (blue), 'success' (green) or 'danger' (red). */
 export const P = 'primary';
@@ -68,21 +69,35 @@ export async function clearSession(ctx) {
  * The session, when there is one, remembers the message so a typed answer can update the same screen.
  */
 export async function show(ctx, text, rows = []) {
-  const markup = { inline_keyboard: rows };
+  // Premium emoji the owner chose replace the ordinary ones on buttons. If Telegram refuses them, send the plain version.
+  ctx.emojiMap = ctx.emojiMap ?? (await loadMap(ctx.db));
+  const rich = decorate(rows, ctx.emojiMap);
+  const hasRich = rich !== rows && JSON.stringify(rich) !== JSON.stringify(rows);
   const body = text.length > 3900 ? `${text.slice(0, 3890)}…` : text;
   const mid = ctx.msgId ?? ctx.session?.message_id ?? null;
-  if (mid) {
-    try {
-      await ctx.tg.editMessageText(ctx.chatId, mid, body, markup);
-      ctx.msgId = mid;
-    } catch (err) {
-      if (err instanceof TelegramError && /not modified/i.test(err.description || '')) ctx.msgId = mid;
-      else ctx.msgId = null; // too old, deleted or otherwise not editable: send a fresh one
+  const attempt = async (inline_keyboard) => {
+    const markup = { inline_keyboard };
+    if (mid) {
+      try {
+        await ctx.tg.editMessageText(ctx.chatId, mid, body, markup);
+        ctx.msgId = mid;
+      } catch (err) {
+        if (err instanceof TelegramError && /not modified/i.test(err.description || '')) ctx.msgId = mid;
+        else if (hasRich && inline_keyboard === rich && err instanceof TelegramError && err.status === 400 && /emoji|icon|document_invalid|button/i.test(err.description || '')) throw err;
+        else ctx.msgId = null; // too old, deleted or otherwise not editable: send a fresh one
+      }
     }
-  }
-  if (!ctx.msgId) {
-    const sent = await ctx.tg.sendMessage(ctx.chatId, body, { reply_markup: markup });
-    ctx.msgId = sent.message_id;
+    if (!ctx.msgId) {
+      const sent = await ctx.tg.sendMessage(ctx.chatId, body, { reply_markup: markup });
+      ctx.msgId = sent.message_id;
+    }
+  };
+  try {
+    await attempt(hasRich ? rich : rows);
+  } catch (err) {
+    if (!hasRich || !(err instanceof TelegramError)) throw err;
+    console.warn('premium emoji refused, sending ordinary emoji', err.description);
+    await attempt(rows);
   }
   if (ctx.session) await saveSession(ctx);
   return ctx.msgId;

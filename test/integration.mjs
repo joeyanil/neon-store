@@ -3,7 +3,7 @@
 // late proofs, blocking, alert retry and proof retention.   npm run test:integration
 import assert from 'node:assert/strict';
 import {
-  ADDR_BEP20, ADDR_TRC20, ADMIN, ADMIN_CHAT, ALICE, APP, BOB, BOT_TOKEN, PNG_BYTES, WEBHOOK_SECRET, STAFF, adminSays, api, evidenceForm, lastCall, lastPayload, nextUpdateId, fakeWebhook, passed, png, press, screenOf,
+  ADDR_BEP20, ADDR_TRC20, ADMIN, ADMIN_CHAT, ALICE, APP, BOB, BOT_TOKEN, PNG_BYTES, WEBHOOK_SECRET, STAFF, adminSays, api, evidenceForm, lastCall, lastPayload, nextUpdateId, fakeWebhook, fakeRules, passed, png, press, screenOf,
   seedCatalog, startStack, step, stopStack, takeCalls, webhook, workerLog,
 } from './harness.mjs';
 import { signInitData } from './helpers.js';
@@ -974,6 +974,37 @@ async function main() {
     assert.equal((await api(ALICE, 'GET', '/api/bootstrap')).body.rates.paused, false);
   });
 
+  await step('premium emoji: the owner gets an ID by sending an emoji, sets it in the app, buttons use it, and a refusal falls back to the ordinary emoji', async () => {
+    // Customers cannot touch it; the owner can.
+    assert.equal((await api(ALICE, 'PUT', '/api/admin/button-emoji', { map: { '🛒': '5368324170671202286' } })).status, 403);
+    assert.equal((await api(STAFF, 'GET', '/api/admin/button-emoji')).status, 403, 'staff cannot change the look of the bot');
+    const list = (await api(ADMIN, 'GET', '/api/admin/button-emoji')).body;
+    assert.ok(list.items.some((i) => i.emoji === '🛒'));
+    assert.equal((await api(ADMIN, 'PUT', '/api/admin/button-emoji', { map: { '🛒': 'abc' } })).body.error.code, 'invalid_field');
+    assert.equal((await api(ADMIN, 'PUT', '/api/admin/button-emoji', { map: { '🦄': '5368324170671202286' } })).body.error.code, 'invalid_field');
+    // The owner sends a premium emoji to the bot and is told its ID. Customers get nothing special.
+    await say(ADMIN, '🛒', { entities: [{ type: 'custom_emoji', offset: 0, length: 2, custom_emoji_id: '5368324170671202286' }] });
+    assert.match(screenOf(ADMIN).text, /5368324170671202286/);
+    await say(ALICE, '🛒', { entities: [{ type: 'custom_emoji', offset: 0, length: 2, custom_emoji_id: '5368324170671202286' }] });
+    assert.ok(!/5368324170671202286/.test(screenOf(ALICE).text), 'customers are not given IDs');
+    // Set it: the menu button loses its ordinary emoji and carries the premium one.
+    assert.equal((await api(ADMIN, 'PUT', '/api/admin/button-emoji', { map: { '🛒': '5368324170671202286' } })).status, 200);
+    await say(ALICE, '/start');
+    const buy = buttons(ALICE).find((b) => b.callback_data === 'c:buy');
+    assert.equal(buy.icon_custom_emoji_id, '5368324170671202286');
+    assert.equal(buy.text, 'Buy USDT');
+    // Telegram refuses it (owner without Premium): the menu still appears, with the ordinary emoji.
+    fakeRules.refuseCustomEmoji = true;
+    await say(ALICE, '/start');
+    const plain = buttons(ALICE).find((b) => b.callback_data === 'c:buy');
+    assert.equal(plain.icon_custom_emoji_id, undefined);
+    assert.equal(plain.text, '🛒 Buy USDT');
+    fakeRules.refuseCustomEmoji = false;
+    // Clearing it restores the ordinary emoji.
+    await api(ADMIN, 'PUT', '/api/admin/button-emoji', { map: { '🛒': '' } });
+    await say(ALICE, '/start');
+    assert.equal(buttons(ALICE).find((b) => b.callback_data === 'c:buy').text, '🛒 Buy USDT');
+  });
   await step('English is the only language: others are refused', async () => {
     assert.equal((await api(ALICE, 'POST', '/api/language', { language: 'en' })).status, 200);
     assert.equal((await api(ALICE, 'POST', '/api/language', { language: 'am' })).status, 400);
