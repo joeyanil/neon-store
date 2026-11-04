@@ -50,7 +50,7 @@ export async function showMenu(ctx, note = '', welcome = false) {
     [btn(b.support, 'c:sup', W), ...url('reviews'), ...url('channel')],
     [btn(b.policies, 'c:pol', W), ...url('logs')],
   ];
-  if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
+  if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` }, style: 'primary' }]);
   if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, G)]);
   const stamp = ctx.role ? `\n\n<i>Version ${VERSION}</i>` : ''; // only the team sees which build is live
   const intro = welcome ? ctx.s.welcome(ctx.user.first_name) : `<b>${ctx.s.menuTitle}</b>\n${ctx.s.menuIntro}`;
