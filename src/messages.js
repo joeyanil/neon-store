@@ -93,6 +93,7 @@ const COPY = {
     rejected: (o) => `${o.id} was not accepted${o.reject_reason ? `: ${REASON_EN[o.reject_reason]}` : ''}. Open Support in the app and mention this order number.`,
     expired: (o) => `${o.id} expired because no payment was submitted in time. If you already paid, contact Support right away.`,
     reference: (o, ref) => `Reference for ${o.id}: ${ref}`,
+    rate_prompt: 'How did it go? One tap tells us.',
   },
   am: {
     open_order: 'ትዕዛዙን ክፈት',
@@ -106,6 +107,7 @@ const COPY = {
     rejected: (o) => `${o.id} አልተቀበለም${o.reject_reason ? `: ${REASON_AM[o.reject_reason]}` : ''}። በመተግበሪያው ውስጥ ድጋፍን ከፍተው የትዕዛዙን ቁጥር ይጥቀሱ።`,
     expired: (o) => `${o.id} ክፍያ በጊዜው ስላልገባ ጊዜው አልፏል። ቀድሞ ከከፈሉ ወዲያውኑ ድጋፍን ያነጋግሩ።`,
     reference: (o, ref) => `የ${o.id} ማጣቀሻ: ${ref}`,
+    rate_prompt: '',
   },
 };
 

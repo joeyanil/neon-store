@@ -43,6 +43,9 @@ export async function getSettings(db) {
     admin_chat_explicit: raw.admin_chat_id !== undefined && raw.admin_chat_id !== '',
     alerts_tested: n('alerts_tested') === 1,
     bot_username: raw.bot_username || '',
+    channel_ref: raw.channel_ref || '',
+    reviews_ref: raw.reviews_ref || '',
+    logs_ref: raw.logs_ref || '',
   };
 }
 
@@ -212,6 +215,7 @@ export function orderView(row, events, proofs) {
     late: row.late === 1,
     reject_reason: row.reject_reason,
     completion_ref: row.completion_ref,
+    feedback: row.feedback || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     expires_at: row.expires_at,

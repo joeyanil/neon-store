@@ -1,8 +1,26 @@
 import { api, serverNow } from './api.js';
 import { emptyState, langPill, orderCard, S } from './components.js';
 import { formatAgo, t } from './i18n.js';
-import { haptic, user } from './tg.js';
+import { PLATFORMS } from './platforms.js';
+import { haptic, openTelegramLink, user } from './tg.js';
 import { etb, h, icon, isOpen, skeletons, usdt } from './ui.js';
+
+/** Four coloured shortcuts: one tap from the home screen to a platform's price list. */
+function servicesBlock(ctx) {
+  const open = (path) => { haptic.press(); ctx.go(path); };
+  return h('section', { class: 'stack' },
+    h('div', { class: 'row between' }, h('h2', { class: 'section-title' }, t('services_tile')),
+      h('button', { class: 'langpill', type: 'button', onclick: () => open('/services') }, t('see_all'))),
+    h('div', { class: 'quick' }, PLATFORMS.map((p) => h('button', { class: `quick-item plat-${p.code}`, type: 'button', onclick: () => open(`/services/${p.code}`) },
+      h('span', { class: 'plat-dot big', 'aria-hidden': 'true' }, icon(p.icon, 24)), h('span', { class: 'quick-label' }, p.name)))));
+}
+
+const LINKS = [['channel', 'megaphone', 'link_channel'], ['reviews', 'star', 'link_reviews'], ['logs', 'receipt', 'link_logs']];
+function linksBlock(links) {
+  const shown = LINKS.filter(([k]) => links && links[k]);
+  if (!shown.length) return null;
+  return h('div', { class: 'link-row' }, shown.map(([k, ic, label]) => h('button', { class: `link-chip link-${k}`, type: 'button', onclick: () => { haptic.select(); openTelegramLink(links[k]); } }, icon(ic, 18), t(label))));
+}
 
 export function homeScreen(ctx) {
   const { boot } = S;
@@ -19,7 +37,7 @@ export function homeScreen(ctx) {
         h('div', { class: 'verb' }, t(`${side}_verb`)),
         h('div', { class: 'hint' }, t(`${side}_hint`))),
       h('div', null,
-        h('div', { class: 'rate num' }, boot.rates.ready && boot.availability[side] ? etb(rate) : '—'),
+        h('div', { class: 'rate num' }, boot.rates.ready && boot.availability[side] ? etb(rate) : 'Soon'),
         h('div', { class: 'unit' }, boot.rates.ready && boot.availability[side] ? t('per_usdt') : t('rate_soon'))));
   };
 
@@ -35,10 +53,8 @@ export function homeScreen(ctx) {
       : !boot.availability.buy && !boot.availability.sell && !boot.availability.service ? h('div', { class: 'notice', role: 'status' }, icon('info', 20), t('shop_not_open')) : null,
     h('div', { class: 'pillows' }, pillow('buy'), pillow('sell')),
     boot.stock ? h('p', { class: 'stock-line' }, icon('shield', 16), t('stock_left', { n: usdt(boot.stock.available_usdt_micro) })) : null,
-    boot.availability.service ? h('button', { class: 'clay tight service-tile', type: 'button', onclick: () => { haptic.press(); ctx.go('/services'); } },
-      h('span', { class: 'side-dot svc', 'aria-hidden': 'true' }, icon('bag', 22)),
-      h('div', { class: 'grow' }, h('div', { class: 'strong' }, t('services_tile')), h('div', { class: 'tiny' }, t('services_tile_hint'))),
-      icon('chevron', 20)) : null,
+    boot.availability.service ? servicesBlock(ctx) : null,
+    linksBlock(boot.links),
     boot.rates.ready ? h('p', { class: 'tiny' }, t('rates_updated', { when: formatAgo(boot.rates.updated_at, serverNow()) })) : null,
     ordersBox);
 

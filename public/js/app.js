@@ -31,6 +31,7 @@ const ROUTES = [
   { re: /^\/support$/, screen: helpScreen, tab: true },
   { re: /^\/admin$/, screen: adminHomeScreen, tab: true },
   { re: /^\/services$/, screen: servicesScreen },
+  { re: /^\/services\/(telegram|instagram|tiktok|youtube|other)$/, screen: servicesScreen, params: (m) => ({ platform: m[1] }) },
   { re: /^\/service\/([a-z0-9-]+)$/, screen: serviceScreen, params: (m) => ({ code: m[1] }) },
   { re: /^\/service\/([a-z0-9-]+)\/review$/, screen: serviceScreen, params: (m) => ({ code: m[1], step: 'review' }) },
   { re: /^\/ticket\/new$/, screen: ticketNewScreen },
@@ -53,6 +54,7 @@ const ROUTES = [
   { re: /^\/admin\/team$/, screen: AS.teamScreen },
   { re: /^\/admin\/alerts$/, screen: AS.alertsScreen },
   { re: /^\/admin\/emoji$/, screen: AS.buttonEmojiScreen },
+  { re: /^\/admin\/channels$/, screen: AS.channelsScreen },
   { re: /^\/admin\/audit$/, screen: AS.auditScreen },
   { re: /^\/trade\/(buy|sell)$/, screen: tradeScreen, params: (m) => ({ side: m[1] }) },
   { re: /^\/trade\/(buy|sell)\/review$/, screen: tradeScreen, params: (m) => ({ side: m[1], step: 'review' }) },
@@ -121,7 +123,7 @@ function paintNav() {
   const list = tabs();
   nav.classList.toggle('five', list.length === 5);
   nav.replaceChildren(...list.map((tab) => {
-    const a = h('a', { href: '#', 'aria-current': tab.path === path ? 'page' : null, onclick: (e) => {
+    const a = h('a', { href: '#', class: `tab-${tab.icon}`, 'aria-current': tab.path === path ? 'page' : null, onclick: (e) => {
       e.preventDefault();
       if (tab.path === path) { current?.screen.refresh?.(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
       TG.haptic.select();

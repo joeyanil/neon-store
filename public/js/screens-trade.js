@@ -167,7 +167,7 @@ function formScreen(ctx, side, d) {
 
   function refresh() {
     const c = checkDraft(side, d, boot);
-    refs.total.textContent = c.total ? `${etb(c.total)} ETB` : '—';
+    refs.total.textContent = c.total ? `${etb(c.total)} ETB` : '0.00 ETB';
     refs.amountErr.textContent = c.errors.amount || '';
     refs.amountWrap.classList.toggle('bad', Boolean(c.errors.amount));
     const net = boot.catalog.networks.find((n) => n.code === d.network);

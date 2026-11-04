@@ -1,5 +1,6 @@
 // Chat mode of the bot: everything the Mini App does, as guided conversations inside Telegram.
 // One message is edited as the person moves along; typed answers are removed to keep the chat tidy.
+import { links, postFeedback, postLog, saveFeedback } from './channels.js';
 import { createOrder } from './create.js';
 import { ApiError } from './http.js';
 import { etbForUsdt, parseUsdt } from './money.js';
@@ -37,7 +38,7 @@ async function shop(ctx) {
 
 // ---------- menu ----------
 
-export async function showMenu(ctx, note = '') {
+export async function showMenu(ctx, note = '', welcome = false) {
   await clearSession(ctx);
   const b = ctx.s.btn;
   const rows = [
@@ -46,10 +47,14 @@ export async function showMenu(ctx, note = '') {
     [btn(b.orders, 'c:ol:active:0', W), btn(b.support, 'c:sup', W)],
     [btn(b.policies, 'c:pol', W)],
   ];
+  const ln = links((await shop(ctx)).settings);
+  const linkRow = [['channel', ln.channel], ['reviews', ln.reviews], ['logs', ln.logs]].filter(([, url]) => url).map(([k, url]) => ({ text: b[k], url }));
+  if (linkRow.length) rows.push(linkRow);
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
   if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, G)]);
   const stamp = ctx.role ? `\n\n<i>Version ${VERSION}</i>` : ''; // only the team sees which build is live
-  return show(ctx, `<b>${ctx.s.menuTitle}</b>\n${ctx.s.menuIntro}${note ? `\n\n${note}` : ''}${stamp}`, rows);
+  const intro = welcome ? ctx.s.welcome(ctx.user.first_name) : `<b>${ctx.s.menuTitle}</b>\n${ctx.s.menuIntro}`;
+  return show(ctx, `${intro}${note ? `\n\n${note}` : ''}${stamp}`, rows);
 }
 
 // ---------- rates ----------
@@ -241,6 +246,7 @@ async function confirmOrder(ctx) {
   else Object.assign(body, { side: 'service', service: data.service, quantity: data.qty, target: data.target, method: data.method });
   try {
     const row = await createOrder(ctx.db, ctx.user.id, body);
+    await postLog(ctx.tg, (await shop(ctx)).settings, 'pending', row).catch(() => {});
     await clearSession(ctx);
     return showPayment(ctx, orderView(row), true);
   } catch (err) {
@@ -496,6 +502,13 @@ export async function handleChatCallback(env, tg, cb) {
         }
         break;
       }
+      case 'fb': {
+        const saved = isOrderId(a) ? await saveFeedback(ctx.db, ctx.user.id, a, b === 'g', nowSec()) : null;
+        if (saved) await postFeedback(tg, (await shop(ctx)).settings, saved, b === 'g').catch(() => {});
+        await tg.answerCallbackQuery(cb.id, saved ? 'Thanks for the feedback.' : 'Feedback was already sent.').catch(() => {});
+        await tg.editMessageReplyMarkup(chatId, cb.message?.message_id, { inline_keyboard: [[{ text: ctx.s.btn.home, callback_data: 'c:home', style: 'primary' }]] }).catch(() => {});
+        return true;
+      }
       case 'sup': await showSupport(ctx); break;
       case 'tc': if (a in ctx.s.cats) await startTicket(ctx, a); else await showSupport(ctx); break;
       case 'th': await startTicket(ctx, 'failed_order', (await ownOrder(ctx, a)) ? a : null); break;
@@ -560,7 +573,7 @@ export async function handleChatFallback(env, tg, msg, note) {
 export async function handleChatCommand(env, tg, msg, cmd) {
   if (msg.chat.type !== 'private') return false;
   const ctx = await makeCtx(env, tg, msg.from, msg.chat.id);
-  const map = { '/start': showMenu, '/menu': showMenu, '/help': showMenu, '/rates': showRates, '/orders': (c) => showOrders(c, 'active', 0), '/support': showSupport, '/policies': showPolicies };
+  const map = { '/start': (c) => showMenu(c, '', true), '/menu': showMenu, '/help': showMenu, '/rates': showRates, '/orders': (c) => showOrders(c, 'active', 0), '/support': showSupport, '/policies': showPolicies };
   if (cmd === '/buy' || cmd === '/sell') return (await startFlow(ctx, cmd.slice(1)), true);
   if (cmd === '/services') return (await startFlow(ctx, 'svc'), true);
   const fn = map[cmd];

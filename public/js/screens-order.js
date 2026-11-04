@@ -147,7 +147,19 @@ export function orderScreen(ctx) {
       h('div', { class: 'row' }, h('div', { class: 'success-mark' }, icon('check', 40)),
         h('div', { class: 'grow' }, h('h2', { class: 'section-title' }, t(`done_title_${order.side}`)), h('p', { class: 'muted small' }, t(`done_body_${order.side}`)))),
       order.completion_ref ? copyRow(t('reference'), order.completion_ref) : null,
-      buy && order.usdt_address ? copyRow(t('row_address'), order.usdt_address) : null);
+      buy && order.usdt_address ? copyRow(t('row_address'), order.usdt_address) : null,
+      feedbackRow());
+  }
+
+  function feedbackRow() {
+    if (order.feedback) return h('div', { class: 'notice' }, icon('check', 20), t(order.feedback === 'good' ? 'fb_thanks_good' : 'fb_thanks_bad'));
+    const send = async (verdict) => {
+      try { await api.sendFeedback(order.id, verdict); haptic.success(); toast(t('fb_thanks'), 'ok'); signature = ''; load({ quiet: true }); } catch (err) { toast(errorText(err), 'error'); }
+    };
+    return h('div', { class: 'stack' }, h('div', { class: 'strong' }, t('fb_ask')),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn grow fb-good', type: 'button', onclick: () => send('good') }, icon('check', 18), t('fb_good')),
+        h('button', { class: 'btn grow fb-bad', type: 'button', onclick: () => send('bad') }, icon('alert', 18), t('fb_bad'))));
   }
 
   // ----- render -----

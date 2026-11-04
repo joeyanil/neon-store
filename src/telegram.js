@@ -62,6 +62,10 @@ export class Telegram {
     return this._send('sendDocument', { body: form });
   }
 
+  editMessageReplyMarkup(chatId, messageId, replyMarkup) {
+    return this.call('editMessageReplyMarkup', { chat_id: chatId, message_id: messageId, reply_markup: replyMarkup });
+  }
+
   editMessageText(chatId, messageId, text, replyMarkup) {
     return this.call('editMessageText', {
       chat_id: chatId,

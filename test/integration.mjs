@@ -831,7 +831,7 @@ async function main() {
     assert.match(screenOf(ALICE).text, /not a valid/);
     await say(ALICE, ADDR_TRC20);
     const confirm = screenOf(ALICE);
-    assert.match(confirm.text, /Please check your order/);
+    assert.match(confirm.text, /Check your order/);
     assert.match(confirm.text, /25\.00 USDT/);
     assert.equal(confirm.id, first.id, 'the same message was edited all along');
     assert.ok(takeCalls('deleteMessage', (p) => p.chat_id === ALICE.id).length >= 3, 'typed answers removed');
@@ -873,7 +873,7 @@ async function main() {
     await say(BOB, '12');
     assert.match(screenOf(BOB).text, /not a valid phone/);
     await say(BOB, '0912 345 678');
-    assert.match(screenOf(BOB).text, /Please check your order/);
+    assert.match(screenOf(BOB).text, /Check your order/);
     await tap(BOB, 'c:ok');
     const pay = screenOf(BOB);
     assert.ok(pay.text.includes(ADDR_TRC20));
@@ -925,7 +925,7 @@ async function main() {
     await tap(ALICE, pol.callback_data);
     assert.ok(screenOf(ALICE).text.length > 60);
     await tap(ALICE, 'c:home');
-    assert.match(screenOf(ALICE).text, /Buy and sell USDT/);
+    assert.match(screenOf(ALICE).text, /Swap USDT and birr/);
     assert.ok(!buttons(ALICE).some((b) => /Language|ቋንቋ/.test(b.text)), 'there is no language button');
   });
   await step('rates screen shows both prices and hides the stock when it is not tracked', async () => {
@@ -1055,6 +1055,40 @@ async function main() {
     await scheduledAt(Date.now());
     await sleep(400);
     assert.equal(takeCalls('setWebhook').length, before + 1, 'nothing to repair the second time');
+  });
+  await step('channel, reviews and logs: buttons, anonymised logs, one-time feedback', async () => {
+    assert.equal((await api(ADMIN, 'PUT', '/api/admin/settings', { logs: 'https://t.me/+abcdefghij' })).status, 400, 'an invite link cannot be posted to');
+    const put = await api(ADMIN, 'PUT', '/api/admin/settings', { channel: 'https://t.me/neonchannel', reviews: '@neonreviews', logs: '-1001234567890' });
+    assert.equal(put.status, 200, JSON.stringify(put.body));
+    assert.equal(put.body.settings.reviews_ref, '@neonreviews');
+    const boot = await api(ALICE, 'GET', '/api/bootstrap');
+    assert.equal(boot.body.links.channel, 'https://t.me/neonchannel');
+    assert.equal(boot.body.links.reviews, 'https://t.me/neonreviews');
+    assert.equal(boot.body.links.logs, '');
+    await tap(ALICE, 'c:home');
+    assert.ok(buttons(ALICE).some((b) => b.url === 'https://t.me/neonchannel'), 'channel button');
+    assert.ok(buttons(ALICE).some((b) => b.url === 'https://t.me/neonreviews'), 'reviews button');
+    const o = await api(ALICE, 'POST', '/api/orders', sBuy(9, '12'));
+    assert.equal(o.status, 201, JSON.stringify(o.body));
+    const id = o.body.order.id;
+    const pending = lastPayload('sendMessage', (p) => String(p.chat_id) === '-1001234567890');
+    assert.match(pending.text, /New pending order/);
+    assert.match(pending.text, /111\*\*\*01/);
+    assert.ok(!pending.text.includes('111001'), 'the customer id is masked');
+    await api(ALICE, 'POST', `/api/orders/${id}/evidence`, evidenceForm({ text: 'TXN-FB-1' }));
+    await api(ADMIN, 'POST', `/api/admin/orders/${id}/confirm`, {});
+    await api(ADMIN, 'POST', `/api/admin/orders/${id}/release`, { reference: 'hash-fb' });
+    assert.match(lastPayload('sendMessage', (p) => String(p.chat_id) === '-1001234567890').text, /New purchase/);
+    const dm = dmTo(ALICE.id);
+    assert.ok(dm.reply_markup.inline_keyboard.flat().some((b) => b.callback_data === `c:fb:${id}:g`), 'feedback buttons on the completion message');
+    assert.equal((await api(BOB, 'POST', `/api/orders/${id}/feedback`, { verdict: 'good' })).status, 404, 'only the owner can rate');
+    assert.equal((await api(ALICE, 'POST', `/api/orders/${id}/feedback`, { verdict: 'meh' })).status, 400);
+    await tap(ALICE, `c:fb:${id}:g`);
+    assert.match(lastPayload('sendMessage', (p) => p.chat_id === '@neonreviews').text, /New feedback: good/);
+    const posts = takeCalls('sendMessage', (p) => p.chat_id === '@neonreviews').length;
+    await api(ALICE, 'POST', `/api/orders/${id}/feedback`, { verdict: 'bad' });
+    assert.equal(takeCalls('sendMessage', (p) => p.chat_id === '@neonreviews').length, posts, 'feedback counts once');
+    assert.equal((await api(ALICE, 'GET', `/api/orders/${id}`)).body.order.feedback, 'good');
   });
   await step('Telegram messages with a wrong or missing secret are refused', async () => {
     const upd = { update_id: nextUpdateId(), message: { message_id: 9, from: ALICE, chat: { id: ALICE.id, type: 'private' }, text: '/start' } };

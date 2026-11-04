@@ -42,5 +42,11 @@ html.no-fg .wizard-hero > * + * { margin-top: 10px; }
 html.no-fg .check-item > * + * { margin-left: 12px; }
 html.no-fg .preset-row > * { margin: 0 8px 8px 0; }
 html.no-fg .review-actions > * + * { margin-top: 10px; }
-html.no-fg .backrow > * + * { margin-left: 6px; }
-html.no-fg .backrow > svg:last-child { margin-right: 6px; }
+html.no-fg .backrow > * + * { margin-left: 4px; }
+html.no-fg .backrow > svg:last-child { margin-right: 4px; }
+html.no-fg .plat-card > * + * { margin-top: 4px; }
+html.no-fg .plat-banner > * + * { margin-left: 14px; }
+html.no-fg .quick-item > * + * { margin-top: 8px; }
+html.no-fg .link-row > * { margin: 0 10px 10px 0; }
+html.no-fg .link-chip > * + * { margin-left: 8px; }
+html.no-fg .link-chip > svg:last-child { margin-right: 8px; }

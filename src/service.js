@@ -1,6 +1,7 @@
 // Business flows that touch both the database and Telegram: proof submission, admin actions,
 // alerts and customer notifications, expiry, and the bot's webhook.
 import { adminSummary, allAdminIds, audit, getRole } from './admin.js';
+import { postLog } from './channels.js';
 import { ApiError } from './http.js';
 import { adminCard, adminKeyboard, copy } from './messages.js';
 import { formatEtb, formatUsdt, parseRate, parseUsdt } from './money.js';
@@ -30,9 +31,11 @@ export async function notifyUser(env, tg, userId, kind, order, ref) {
     const user = await getUser(env.DB, userId);
     const c = copy(user?.language);
     const text = kind === 'reference' ? c.reference(order, ref) : c[kind](order, ref);
-    await tg.sendMessage(userId, esc(text), {
-      reply_markup: { inline_keyboard: [[{ text: c.open_order, web_app: { url: orderUrl(env, order.id) } }]] },
-    });
+    const rows = [[{ text: c.open_order, web_app: { url: orderUrl(env, order.id) } }]];
+    if (kind === 'completed' && !order.feedback) {
+      rows.unshift([{ text: '👍 Good', callback_data: `c:fb:${order.id}:g`, style: 'success' }, { text: '👎 Bad', callback_data: `c:fb:${order.id}:b`, style: 'danger' }]);
+    }
+    await tg.sendMessage(userId, esc(text) + (kind === 'completed' ? `\n\n${c.rate_prompt}` : ''), { reply_markup: { inline_keyboard: rows } });
   } catch (err) {
     if (err instanceof TelegramError && (err.status === 403 || err.status === 400)) {
       await env.DB.prepare('UPDATE users SET can_dm = 0 WHERE id = ?').bind(userId).run().catch(() => {});
@@ -233,6 +236,7 @@ export async function adminAct(env, tg, actorId, orderId, action, { reference, r
   await refreshAdminCards(env, tg, orderId).catch(() => {});
   if (!res.ok) return { ok: false, order: row, message: `Not applied: order is already ${row.status.replace('_', ' ')}.` };
   await notifyUser(env, tg, row.user_id, spec.notify, row, set.completion_ref);
+  if (spec.to === 'completed') await postLog(tg, await getSettings(env.DB), 'purchase', row).catch(() => {});
   return { ok: true, order: row, message: spec.done };
 }
 

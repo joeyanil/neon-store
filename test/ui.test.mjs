@@ -186,8 +186,10 @@ async function main() {
   console.log('\nServices and support in the app');
   page = await newPage();
   await step('customer orders a service', async () => {
-    await page.getByText('Social-media services').click();
+    await page.locator('.quick-item.plat-telegram').click(); // home shortcut straight to the Telegram price list
     await waitText(page, 'Telegram members');
+    assert.ok(!(await body(page)).includes('Instagram'), 'only the chosen platform is listed');
+    await shot(page, '49-platform');
     await page.getByText('Telegram members').first().click();
     await page.waitForTimeout(600);
     console.log('  >', (await body(page)).replace(/\n+/g, ' | ').slice(0, 500));

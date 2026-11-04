@@ -56,6 +56,7 @@ export const api = {
   listOrders: (filter = 'all', before = null) =>
     request('GET', `/api/orders?filter=${filter}${before ? `&before=${before}` : ''}`),
   getOrder: (id) => request('GET', `/api/orders/${id}`),
+  sendFeedback: (id, verdict) => request('POST', `/api/orders/${id}/feedback`, { json: { verdict } }),
   cancelOrder: (id) => request('POST', `/api/orders/${id}/cancel`, { json: {} }),
   sendEvidence: (id, form) => request('POST', `/api/orders/${id}/evidence`, { form, timeout: 60_000 }),
   policies: () => request('GET', '/api/policies'),

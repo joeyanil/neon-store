@@ -4,26 +4,50 @@ import { S } from './components.js';
 import { flowTop, listRow, textField } from './form.js';
 import { errorText, getLang, t } from './i18n.js';
 import { cleanTarget } from './rules.js';
+import { PLATFORMS, platformOf } from './platforms.js';
 import { lockInfo } from './screens-trade.js';
 import { haptic, setActions, setClosingConfirmation } from './tg.js';
 import { etb, h, icon, methodLabel, toast } from './ui.js';
 
-const PLATFORM_NAME = { telegram: 'Telegram', instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube', other: '•••' };
+const PLATFORM_NAME = new Proxy({}, { get: (_, k) => platformOf(k).name });
 const serviceName = (s) => (getLang() === 'am' ? s.name_am || s.name_en : s.name_en);
 const priceText = (s) => t('price_per_1000', { price: etb(s.price_cents_per_1000) });
 export const serviceTotal = (qty, price) => Math.ceil((qty * price) / 1000);
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
+/** Step one: four platform cards. Step two (a platform picked): only that platform's services and prices. */
 export function servicesScreen(ctx) {
   const { boot } = S;
-  const groups = {};
-  for (const s of boot.catalog.services) (groups[s.platform] = groups[s.platform] || []).push(s);
-  const body = Object.keys(groups).length
-    ? Object.entries(groups).map(([p, list]) => h('section', { class: 'stack' },
-      h('h2', { class: 'section-title' }, PLATFORM_NAME[p] || p),
-      ...list.map((s) => listRow({ title: serviceName(s), sub: `${priceText(s)} · ${fmt(s.min_qty)}–${fmt(s.max_qty)}`, onClick: () => { haptic.select(); ctx.go(`/service/${s.code}`); } }))))
-    : [h('div', { class: 'clay' }, h('p', { class: 'muted' }, t('services_empty')))];
-  return { el: h('div', { class: 'screen' }, flowTop(ctx, t('services_title')), ...body) };
+  const all = boot.catalog.services;
+  const byPlatform = (code) => all.filter((s) => s.platform === code);
+  if (ctx.params.platform) return platformScreen(ctx, ctx.params.platform, byPlatform(ctx.params.platform));
+  const cards = PLATFORMS.concat(all.some((s) => !PLATFORMS.some((p) => p.code === s.platform)) ? [platformOf('other')] : []).map((p) => {
+    const list = p.code === 'other' ? all.filter((s) => !PLATFORMS.some((q) => q.code === s.platform)) : byPlatform(p.code);
+    const from = list.length ? Math.min(...list.map((s) => s.price_cents_per_1000)) : 0;
+    return h('button', { class: `plat-card plat-${p.code}`, type: 'button', disabled: !list.length, onclick: () => { haptic.select(); ctx.go(`/services/${p.code}`); } },
+      h('span', { class: 'plat-icon' }, icon(p.icon, 26)),
+      h('span', { class: 'plat-name' }, p.name),
+      h('span', { class: 'plat-meta' }, list.length ? list.length === 1 ? t('svc_count_one') : t('svc_count', { n: list.length }) : t('svc_none_yet')),
+      list.length ? h('span', { class: 'plat-from num' }, t('svc_from', { price: etb(from) })) : null);
+  });
+  return { el: h('div', { class: 'screen' }, flowTop(ctx, t('services_title')),
+    all.length ? h('div', { class: 'stack' }, h('p', { class: 'muted' }, t('svc_pick_sub')), h('div', { class: 'plat-grid' }, cards))
+      : h('div', { class: 'clay' }, h('p', { class: 'muted' }, t('services_empty')))) };
+}
+
+function platformScreen(ctx, code, list) {
+  const p = platformOf(code);
+  const rows = list.map((s) => h('button', { class: `clay tight list-row svc-row plat-${code}`, type: 'button', onclick: () => { haptic.select(); ctx.go(`/service/${s.code}`); } },
+    h('span', { class: 'plat-dot', 'aria-hidden': 'true' }, icon(p.icon, 20)),
+    h('div', { class: 'grow' },
+      h('div', { class: 'strong' }, serviceName(s)),
+      h('div', { class: 'tiny' }, `${fmt(s.min_qty)} to ${fmt(s.max_qty)}`)),
+    h('div', { class: 'svc-price num' }, etb(s.price_cents_per_1000), h('small', null, 'ETB / 1,000')),
+    icon('chevron', 20)));
+  return { el: h('div', { class: 'screen' }, flowTop(ctx, p.name),
+    h('div', { class: `plat-banner plat-${code}` }, h('span', { class: 'plat-icon' }, icon(p.icon, 26)),
+      h('div', { class: 'grow' }, h('div', { class: 'plat-name' }, p.name), h('div', { class: 'plat-meta' }, t('svc_list_sub')))),
+    h('div', { class: 'stack' }, ...(rows.length ? rows : [h('div', { class: 'clay' }, h('p', { class: 'muted' }, t('services_empty')))]))) };
 }
 
 export function serviceScreen(ctx) {
@@ -51,7 +75,7 @@ function check(svc, d) {
 function form(ctx, svc, d, methods, open) {
   const qty = textField({ label: t('svc_quantity'), value: d.qty, inputMode: 'numeric', hint: t('svc_range', { min: fmt(svc.min_qty), max: fmt(svc.max_qty) }), onInput: (v) => { d.qty = v.replace(/[^\d,]/g, ''); d.idem = null; refresh(); } });
   const link = textField({ label: t('svc_link'), value: d.target, placeholder: t(`svc_link_ph_${svc.platform}`), onInput: (v) => { d.target = v.trim(); d.idem = null; refresh(); } });
-  const total = h('div', { class: 'num big-amount' }, '—');
+  const total = h('div', { class: 'num big-amount' }, '0.00 ETB');
   const methodBox = h('div', { class: 'choices', role: 'radiogroup', 'aria-label': t('svc_pay_with') },
     methods.map((m) => {
       const lock = lockInfo(m, S.boot.stats);
@@ -74,13 +98,13 @@ function form(ctx, svc, d, methods, open) {
   ];
   const root = h('div', { class: 'screen flow' },
     flowTop(ctx, serviceName(svc)),
-    h('section', { class: 'clay stack' }, h('div', { class: 'row between' }, h('span', { class: 'pill' }, PLATFORM_NAME[svc.platform]), h('span', { class: 'num small strong' }, priceText(svc))), ...facts),
+    h('section', { class: 'clay stack' }, h('div', { class: 'row between' }, h('span', { class: `pill plat-pill plat-${svc.platform}` }, icon(platformOf(svc.platform).icon, 14), PLATFORM_NAME[svc.platform]), h('span', { class: 'num small strong' }, priceText(svc))), ...facts),
     h('section', { class: 'clay stack' }, qty.el, link.el),
     h('section', { class: 'clay stack' }, h('div', { class: 'label section-title' }, t('svc_pay_with')), methodBox,
       h('div', { class: 'well totalbox' }, h('div', { class: 'tiny' }, t('svc_total')), total)));
   function refresh() {
     const c = check(svc, d);
-    total.textContent = c.total ? `${etb(c.total)} ETB` : '—';
+    total.textContent = c.total ? `${etb(c.total)} ETB` : '0.00 ETB';
     qty.error(c.errors.qty || '');
     link.error(c.errors.target || '');
     setClosingConfirmation(Boolean(d.qty || d.target));

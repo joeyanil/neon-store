@@ -1,5 +1,6 @@
 // Everything the admin area needs from the database: accounts, networks, team, settings, queue and setup progress.
 // No Telegram calls here (see service.js for those).
+import { chatOf, parseRef } from './channels.js';
 import { ApiError } from './http.js';
 import { formatEtb, parseRate, parseUsdt } from './money.js';
 import {
@@ -242,6 +243,7 @@ export function settingsView(s) {
     min_usdt_micro: s.min_usdt_micro, max_usdt_micro: s.max_usdt_micro, order_ttl_min: s.order_ttl_min,
     max_open_orders: s.max_open_orders, paused: s.paused, proof_retention_days: s.proof_retention_days,
     stock_usdt_micro: s.stock_usdt_micro, stock_show: s.stock_show, stock_add_on_sell: s.stock_add_on_sell,
+    channel_ref: s.channel_ref, reviews_ref: s.reviews_ref, logs_ref: s.logs_ref,
   };
 }
 
@@ -291,6 +293,14 @@ export async function updateSettings(db, actor, body, now = nowSec()) {
   }
   if (body.stock_show !== undefined) { await setSetting(db, 'stock_show', flag(body.stock_show, 1), now); changes.push(`stock_show ${flag(body.stock_show, 1)}`); }
   if (body.stock_add_on_sell !== undefined) { await setSetting(db, 'stock_add_on_sell', flag(body.stock_add_on_sell, 1), now); changes.push(`stock_add_on_sell ${flag(body.stock_add_on_sell, 1)}`); }
+  for (const [field, key, label, needsChat] of [['channel', 'channel_ref', 'Channel', false], ['reviews', 'reviews_ref', 'Reviews channel', true], ['logs', 'logs_ref', 'Logs channel', true]]) {
+    if (body[field] === undefined) continue;
+    const ref = parseRef(body[field]);
+    if (ref === null) throw bad(field, `${label}: enter the channel like @mychannel or https://t.me/mychannel.`);
+    if (needsChat && ref && !chatOf(ref)) throw bad(field, `${label}: the bot has to post here, so use the public @name or the numeric chat id (an invite link is not enough).`);
+    await setSetting(db, key, ref, now);
+    changes.push(`${field} ${ref || 'cleared'}`);
+  }
   if (body.paused !== undefined) { await setPaused(db, body.paused === true || body.paused === 1, now); changes.push(body.paused ? 'paused' : 'resumed'); }
   if (changes.length) await audit(db, actor, 'settings.update', changes.join('; '), now);
   return settingsView(await getSettings(db));

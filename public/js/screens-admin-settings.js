@@ -42,6 +42,7 @@ export function settingsHubScreen(ctx) {
       row('orders', 'Payment accounts', `${methods.methods.length} added · where customers pay you, and how you pay them`, '/admin/methods'),
       row('globe', 'USDT networks', `${networks.networks.length} added · deposit addresses and sending options`, '/admin/networks'),
       row('bag', 'Services', `${services.services.length} on the price list`, '/admin/services'),
+      row('send', 'Channels', 'Channel, reviews and logs links on the bot', '/admin/channels'),
       row('book', 'Rules and policies', `${policies.sections.length} sections customers can read`, '/admin/policies'),
       row('shield', 'Team', 'Owners and staff', '/admin/team'),
       row('support', 'Alerts', setup.alerts.tested ? (setup.alerts.mode === 'dm' ? 'Private messages to each admin' : 'Sent to a group chat') : 'Not tested yet', '/admin/alerts'),
@@ -222,7 +223,7 @@ const PLATFORM_LABEL = { telegram: 'Telegram', instagram: 'Instagram', tiktok: '
 export const servicesListScreen = (ctx) => listScreen(ctx, {
   heading: 'Services', kind: 'services', pick: 'services', addPath: '/admin/service/new', empty: 'No services yet. Add what you sell, with a price per 1,000.',
   rowOf: (s, c) => listRow({
-    title: s.name_en, sub: `${PLATFORM_LABEL[s.platform]} · ${toBirr(s.price_cents_per_1000)} ETB per 1,000 · ${s.min_qty.toLocaleString('en-US')}–${s.max_qty.toLocaleString('en-US')}`,
+    title: s.name_en, sub: `${PLATFORM_LABEL[s.platform]} · ${toBirr(s.price_cents_per_1000)} ETB per 1,000 · ${s.min_qty.toLocaleString('en-US')} to ${s.max_qty.toLocaleString('en-US')}`,
     badge: s.active ? null : h('span', { class: 'pill' }, 'Off'), lead: lead('bag'), onClick: () => c.go(`/admin/service/${s.code}`),
   }),
 });
@@ -338,6 +339,28 @@ export function alertsScreen(ctx) {
     card(title('Use a group chat'), h('p', { class: 'muted small' }, 'Add the bot to a group of people you trust, then send /alerts in that group. Anyone in the group sees order details.')));
   admin.alerts().then(paint).catch((err) => box.replaceChildren(h('div', { class: 'notice warn' }, errorText(err))));
   return { el: root };
+}
+
+// ---------- channel, reviews and logs ----------
+export function channelsScreen(ctx) {
+  const root = h('div', { class: 'screen flow' }, flowTop(ctx, 'Channels'));
+  let save;
+  loading(root, async () => {
+    const { settings: s } = await admin.settings();
+    const f = {
+      channel: textField({ label: 'Main channel', value: s.channel_ref, placeholder: '@mychannel', hint: 'Shows as a Channel button. A public name or an invite link both work.' }),
+      reviews: textField({ label: 'Reviews channel', value: s.reviews_ref, placeholder: '@myreviews', hint: 'Customers who rate an order are posted here. Add the bot as an admin of this channel.' }),
+      logs: textField({ label: 'Bot logs channel', value: s.logs_ref, placeholder: '@mylogs', hint: 'New and finished orders are posted here with the customer ID hidden. Add the bot as an admin of this channel.' }),
+    };
+    save = async () => {
+      const res = await submit(f, () => admin.saveSettings({ channel: f.channel.get(), reviews: f.reviews.get(), logs: f.logs.get() }));
+      if (res) toast('Saved', 'ok');
+    };
+    return h('div', { class: 'stack' }, card(...Object.values(f).map((x) => x.el)),
+      h('div', { class: 'notice' }, icon('info', 20), 'Leave a box empty to hide that button. A private channel needs its numeric ID (it starts with -100), and then has no button.'));
+  });
+  setActions({ text: 'Save', onClick: () => save?.() });
+  return { el: root, destroy: () => setActions(null) };
 }
 
 // ---------- premium emoji on the chat bot's buttons ----------

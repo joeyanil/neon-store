@@ -61,13 +61,13 @@ async function main() {
     assert.match(screenOf(ALICE).text, /160\.00 ETB/);
     await tap(ALICE, 'c:svc');
     await tap(ALICE, 'c:sp:telegram');
-    assert.match(texts(ALICE), /Telegram subscribers — 90\.00 ETB \/ 1,000/);
+    assert.match(texts(ALICE), /Telegram subscribers: 90\.00 ETB \/ 1,000/);
     await api(ADMIN, 'PUT', '/api/admin/services/demo-tg-subs', { price: '95.5' });
     await api(ADMIN, 'POST', '/api/admin/services', { platform: 'telegram', name_en: 'Telegram boosts', price: '300', min_qty: 10, max_qty: 500 });
     await tap(ALICE, 'c:svc');
     await tap(ALICE, 'c:sp:telegram');
-    assert.match(texts(ALICE), /Telegram subscribers — 95\.50 ETB \/ 1,000/);
-    assert.match(texts(ALICE), /Telegram boosts — 300\.00 ETB \/ 1,000/);
+    assert.match(texts(ALICE), /Telegram subscribers: 95\.50 ETB \/ 1,000/);
+    assert.match(texts(ALICE), /Telegram boosts: 300\.00 ETB \/ 1,000/);
     await api(ADMIN, 'PUT', '/api/admin/services/demo-tg-views', { active: false });
     await tap(ALICE, 'c:svc');
     await tap(ALICE, 'c:sp:telegram');
