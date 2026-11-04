@@ -14,7 +14,6 @@ const EN = {
     language: '🌐 Language', app: '🚀 Open App', admin: '🛠 Admin', back: '↩️ Back', home: '🏠 Menu', cancel: '❌ Cancel', confirm: '✅ Confirm order', change: '✏️ Start over',
     paid: '📤 I paid, send proof', sent: '📤 I sent it, send proof', moreProof: '➕ Add more proof', done: '✅ Done', cancelOrder: '❌ Cancel order', yesCancel: '✅ Yes, cancel it',
     keep: '↩️ No, keep it', refresh: '🔄 Refresh', help: '🎧 Help with this order', skip: '⏭ Skip', newTicket: '➕ New ticket', myTickets: '🎫 My tickets', reply: '✍️ Reply', more: 'More ➡',
-    sec1: '─── EXCHANGE ───', sec2: '─── EXPLORE & MANAGE ───', sec3: '─── COMMUNITY & HELP ───', sec4: '─── INFORMATION ───',
     channel: '📢 Channel', reviews: '⭐ Reviews', logs: '🧾 Bot logs',
     open: '🔵 Open', finished: '⚪ Finished', buyNow: '🛒 Buy USDT', sellNow: '💸 Sell USDT',
   },
