@@ -43,11 +43,16 @@ export async function showMenu(ctx, note = '', welcome = false) {
   const b = ctx.s.btn;
   const ln = links((await shop(ctx)).settings);
   const url = (k) => (ln[k] ? [{ text: b[k], url: ln[k] }] : []);
+  const head = (k) => [btn(b[k], 'c:noop')]; // a slim title row; tapping it does nothing
   const rows = [
+    head('sec1'),
     [btn(b.buy, 'c:buy', G), btn(b.sell, 'c:sell', R)],
+    head('sec2'),
     [btn(b.services, 'c:svc', P)],
     [btn(b.rates, 'c:rates', P), btn(b.orders, 'c:ol:active:0', P)],
+    head('sec3'),
     [btn(b.support, 'c:sup', W), ...url('reviews'), ...url('channel')],
+    head('sec4'),
     [btn(b.policies, 'c:pol', W), ...url('logs')],
   ];
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
@@ -527,6 +532,7 @@ export async function handleChatCallback(env, tg, cb) {
         await show(ctx, ctx.s.ticketReplyAsk, [[btn(ctx.s.btn.cancel, 'c:x', R)]]);
         break;
       }
+      case 'noop': break;
       case 'pol': await showPolicies(ctx); break;
       case 'ps': await showPolicy(ctx, a); break;
       default: await showMenu(ctx);
