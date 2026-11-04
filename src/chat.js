@@ -41,15 +41,15 @@ async function shop(ctx) {
 export async function showMenu(ctx, note = '', welcome = false) {
   await clearSession(ctx);
   const b = ctx.s.btn;
+  const ln = links((await shop(ctx)).settings);
+  const url = (k) => (ln[k] ? [{ text: b[k], url: ln[k] }] : []);
   const rows = [
     [btn(b.buy, 'c:buy', G), btn(b.sell, 'c:sell', R)],
-    [btn(b.services, 'c:svc', P), btn(b.rates, 'c:rates', P)],
-    [btn(b.orders, 'c:ol:active:0', W), btn(b.support, 'c:sup', W)],
-    [btn(b.policies, 'c:pol', W)],
+    [btn(b.services, 'c:svc', P)],
+    [btn(b.rates, 'c:rates', P), btn(b.orders, 'c:ol:active:0', P)],
+    [btn(b.support, 'c:sup', W), ...url('reviews'), ...url('channel')],
+    [btn(b.policies, 'c:pol', W), ...url('logs')],
   ];
-  const ln = links((await shop(ctx)).settings);
-  const linkRow = [['channel', ln.channel], ['reviews', ln.reviews], ['logs', ln.logs]].filter(([, url]) => url).map(([k, url]) => ({ text: b[k], url }));
-  if (linkRow.length) rows.push(linkRow);
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` } }]);
   if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, G)]);
   const stamp = ctx.role ? `\n\n<i>Version ${VERSION}</i>` : ''; // only the team sees which build is live

@@ -1018,7 +1018,7 @@ async function main() {
     assert.equal(style('c:svc'), 'primary');
     assert.equal(style('c:rates'), 'primary');
     assert.equal(style('c:sup'), undefined, 'support is grey');
-    assert.equal(style('c:ol:active:0'), undefined, 'my orders is grey');
+    assert.equal(style('c:ol:active:0'), 'primary', 'my orders is blue');
     await tap(ALICE, 'c:buy');
     assert.equal(style('c:x'), 'danger', 'cancel is red');
     assert.equal(style('c:back'), 'primary', 'back is blue');
