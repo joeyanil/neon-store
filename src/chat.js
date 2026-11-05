@@ -50,6 +50,7 @@ export async function showMenu(ctx, note = '', welcome = false) {
     [btn(b.support, 'c:sup', W), ...url('reviews'), ...url('channel')],
     [btn(b.policies, 'c:pol', W), ...url('logs')],
   ];
+  if (ctx.chatId > 0) rows.push([{ text: '🎮 Play XO with a friend', switch_inline_query: '' }]); // opens the chat picker with the game ready, nobody has to type the bot name
   if (ctx.base && ctx.chatId > 0) rows.push([{ text: b.app, web_app: { url: `${ctx.base}/` }, style: 'primary' }]);
   if (ctx.role) rows.push([btn(b.admin, BTN_ADMIN, G)]);
   const stamp = ctx.role ? `\n\n<i>Version ${VERSION}</i>` : ''; // only the team sees which build is live

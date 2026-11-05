@@ -40,7 +40,7 @@
 
 ## XO game (advertising)
 
-1. In @BotFather send `/setinline`, pick your bot, and set the placeholder to `Play XO`.
+1. In @BotFather send `/setinline`, pick your bot, and set the placeholder to `XO`.
 2. Open `/connect` once (or wait for the 5-minute job) so Telegram starts sending inline requests to the bot.
-3. In any chat type `@YourBot` and choose "Play XO". The first person to tap Play is X, the next to tap Join is O.
+3. In any chat type `@YourBot` and choose "XO". The first person to tap Play is X, the next to tap Join is O.
 4. Each game is one small database row, deleted after 2 days. At most 2,000 new games are accepted per day.

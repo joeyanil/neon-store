@@ -1145,11 +1145,12 @@ async function main() {
     assert.ok(sm.storage.bytes > 0 && sm.storage.limit === 500 * 1024 * 1024, 'the storage meter has a size');
   });
   console.log('\nXO game');
-  await step('XO game: inline offer, two players, win, rematch, full-game rules', async () => {
+  await step('XO game: inline offer, joiner picks who starts, win, play again below, open-bot button, full-game rules', async () => {
     await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq1', from: ALICE, query: '', offset: '' } });
     const iq = lastPayload('answerInlineQuery');
     assert.equal(iq.cache_time, 0);
-    assert.match(iq.results[0].title, /Play XO/);
+    assert.equal(iq.results[0].title, 'XO');
+    assert.match(iq.results[0].description, /Exchange USDT to ETBirr/);
     const imid = 'inl-1';
     const tap = (from, data) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data, inline_message_id: imid } });
     const shown = () => lastPayload('editMessageText', (p) => p.inline_message_id === imid);
@@ -1157,23 +1158,24 @@ async function main() {
     assert.match(shown().text, /Alice is waiting/);
     await tap(ALICE, 'xo:j');
     assert.match(lastPayload('answerCallbackQuery').text, /Wait for a friend/);
-    await tap(BOB, 'xo:j');
+    await tap(BOB, 'xo:j:o'); // Bob joins and chooses to go first
     assert.match(shown().text, /Alice[\s\S]*Bob/);
-    await tap(BOB, 'xo:m:0'); // not Bob's turn
+    assert.match(shown().text, /Turn: .*Bob/, 'the person who joined decided to start');
+    await tap(ALICE, 'xo:m:0'); // Bob's turn, not Alice's
     assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
-    for (const [u, c] of [[ALICE, 0], [BOB, 3], [ALICE, 1], [BOB, 4]]) await tap(u, `xo:m:${c}`);
+    for (const [u, c] of [[BOB, 3], [ALICE, 0], [BOB, 4], [ALICE, 1]]) await tap(u, `xo:m:${c}`);
     const third = { id: 111777, first_name: 'Carl' };
     await tap(third, 'xo:m:8');
     assert.match(lastPayload('answerCallbackQuery').text, /two players/);
-    await tap(ALICE, 'xo:m:3');
+    await tap(BOB, 'xo:m:3');
     assert.match(lastPayload('answerCallbackQuery').text, /taken/);
+    await tap(BOB, 'xo:m:8');
     await tap(ALICE, 'xo:m:2');
     assert.match(shown().text, /Alice wins/);
-    assert.ok(JSON.stringify(shown().reply_markup).includes('xo:r'));
-    await tap(BOB, 'xo:r');
-    assert.match(shown().text, /Bob\s*vs\s*.*Alice/s, 'sides swap on rematch');
-    await tap(BOB, 'xo:m:4'); // Bob is X now
-    assert.match(shown().text, /Turn: .*Alice/);
+    const mk = JSON.stringify(shown().reply_markup);
+    assert.ok(mk.includes('switch_inline_query_current_chat'), 'play again opens a new game below, the result stays');
+    assert.ok(mk.includes('t.me/neon_test_bot?start=xo'), 'a button opens the bot');
+    assert.ok(!mk.includes('xo:m:'), 'a finished board cannot be played');
     await tap(ALICE, 'xo:s');
     assert.match(lastPayload('answerCallbackQuery').text, /already started/);
   });

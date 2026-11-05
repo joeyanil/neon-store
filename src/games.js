@@ -1,11 +1,14 @@
 // Inline XO (tic-tac-toe). Anyone types @bot in any chat, picks "Play XO", and the game message appears there.
 // The first person to tap becomes X, the next different person becomes O. Each game is one small row in D1.
 import { esc } from './telegram.js';
+import { getSettings } from './orders.js';
+import { botUsername } from './notify.js';
 
 const DAILY_CAP = 2000; // new games per 24 hours; a safety net for the free plan
 const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-const MARK = { X: 'X', O: 'O', '.': '·' };
-const PROMO = '🎮 <i>Neon Store · USDT and social media services</i>';
+const MARK = { X: '𝗫', O: '𝗢', '.': '·' }; // bold letters for the squares
+const TAGLINE = '<i>Neon Store: Exchange USDT to ETBirr</i>';
+const OFFER = 'Neon Store: Exchange USDT to ETBirr';
 
 export const nameOf = (u) => String([u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'Player').replace(/\s+/g, ' ').trim().slice(0, 20);
 
@@ -14,28 +17,37 @@ export function winnerOf(board) {
   return board.includes('.') ? null : 'D';
 }
 
-function view(g) {
-  const x = `X · ${esc(g.x_name)}`;
-  const o = g.o_id ? `O · ${esc(g.o_name)}` : 'O · …';
+const openApp = (bot) => (bot ? [{ text: '🛍 Open Neon Store', url: `https://t.me/${bot}?start=xo` }] : []);
+
+function view(g, bot) {
+  const xn = `<b>X</b> ${esc(g.x_name)}`;
+  const on = g.o_id ? `<b>O</b> ${esc(g.o_name)}` : '<b>O</b> …';
+  const app = openApp(bot);
   if (g.status === 'wait') {
-    return { text: `<b>Tic-Tac-Toe</b>\n${x} is waiting for an opponent.\n\n${PROMO}`, markup: { inline_keyboard: [[{ text: 'Join as O', callback_data: 'xo:j' }]] } };
+    return {
+      text: `<b>XO</b> · ${xn} is waiting\n${TAGLINE}`,
+      markup: { inline_keyboard: [
+        [{ text: 'Join · I go first', callback_data: 'xo:j:o' }, { text: `Join · ${g.x_name} goes first`, callback_data: 'xo:j:x' }],
+        app] },
+    };
   }
-  const rows = [0, 3, 6].map((r) => [0, 1, 2].map((c) => ({ text: MARK[g.board[r + c]], callback_data: `xo:m:${r + c}` })));
   let line;
-  if (g.status === 'done') line = g.winner === 'D' ? "🤝 It's a draw!" : `🏆 ${g.winner === 'X' ? esc(g.x_name) : esc(g.o_name)} wins!`;
-  else line = `Turn: ${g.turn === 'X' ? x : o}`;
+  if (g.status === 'done') line = g.winner === 'D' ? "It's a draw" : `🏆 ${g.winner === 'X' ? esc(g.x_name) : esc(g.o_name)} wins`;
+  else line = `Turn: ${g.turn === 'X' ? xn : on}`;
+  const rows = [0, 3, 6].map((r) => [0, 1, 2].map((c) => ({ text: MARK[g.board[r + c]], callback_data: g.status === 'done' ? 'xo:n' : `xo:m:${r + c}` })));
   const kb = [...rows];
-  if (g.status === 'done') kb.push([{ text: '🔁 Rematch', callback_data: 'xo:r' }]);
-  return { text: `<b>Tic-Tac-Toe</b>\n${x}  vs  ${o}\n\n${line}\n\n${PROMO}`, markup: { inline_keyboard: kb.filter((r) => r.length) } };
+  if (g.status === 'done') kb.push([{ text: '🔁 Play again', switch_inline_query_current_chat: '' }]); // posts a fresh game below this one
+  kb.push(app);
+  return { text: `<b>XO</b> · ${xn}  vs  ${on}\n${line}\n${TAGLINE}`, markup: { inline_keyboard: kb.filter((r) => r.length) } };
 }
 
 /** Someone typed @bot in a chat: offer one game. */
 export async function handleInlineQuery(env, tg, q) {
-  const text = `<b>Tic-Tac-Toe</b>\nTap Play to start. The first person to tap is X, the next is O.\n\n${PROMO}`;
+  const bot = await botUsername(env, tg, await getSettings(env.DB));
   await tg.answerInlineQuery(q.id, [{
-    type: 'article', id: `xo${Date.now().toString(36)}`, title: 'Play XO', description: 'Tic-tac-toe with a friend in this chat',
-    input_message_content: { message_text: text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
-    reply_markup: { inline_keyboard: [[{ text: '▶️ Play', callback_data: 'xo:s' }]] },
+    type: 'article', id: `xo${Date.now().toString(36)}`, title: 'XO', description: OFFER,
+    input_message_content: { message_text: `<b>XO</b> · tap Play to start\n${TAGLINE}`, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
+    reply_markup: { inline_keyboard: [[{ text: '▶️ Play', callback_data: 'xo:s' }], openApp(bot)] },
   }]);
 }
 
@@ -47,7 +59,8 @@ export async function handleGameCallback(env, tg, cb) {
   const me = cb.from;
   const now = Math.floor(Date.now() / 1000);
   const say = (t, alert = false) => tg.answerCallbackQuery(cb.id, t, alert).catch(() => {});
-  const show = async (g) => { const v = view(g); await tg.editInlineMessage(id, v.text, v.markup).catch(() => {}); };
+  const bot = await botUsername(env, tg, await getSettings(env.DB));
+  const show = async (g) => { const v = view(g, bot); await tg.editInlineMessage(id, v.text, v.markup).catch(() => {}); };
   const [, act, arg] = String(cb.data || '').split(':');
   let g = await getGame(env.DB, id);
 
@@ -64,7 +77,8 @@ export async function handleGameCallback(env, tg, cb) {
   if (act === 'j') {
     if (g.status !== 'wait') return say('Already full.');
     if (g.x_id === me.id) return say('Wait for a friend to join.', true);
-    const r = await env.DB.prepare("UPDATE games SET o_id = ?, o_name = ?, status = 'play', updated_at = ? WHERE id = ? AND status = 'wait'").bind(me.id, nameOf(me), now, id).run();
+    const first = arg === 'x' ? 'X' : 'O'; // the person who joins decides who starts
+    const r = await env.DB.prepare("UPDATE games SET o_id = ?, o_name = ?, turn = ?, status = 'play', updated_at = ? WHERE id = ? AND status = 'wait'").bind(me.id, nameOf(me), first, now, id).run();
     await say();
     if (!r.meta.changes) return;
     return show(await getGame(env.DB, id));
@@ -83,13 +97,6 @@ export async function handleGameCallback(env, tg, cb) {
     if (!r.meta.changes) return;
     return show(await getGame(env.DB, id));
   }
-  if (act === 'r') {
-    if (g.status !== 'done') return say();
-    if (me.id !== g.x_id && me.id !== g.o_id) return say('Only the players can start a rematch.', true);
-    const r = await env.DB.prepare("UPDATE games SET board = '.........', turn = 'X', status = 'play', winner = NULL, moves = 0, x_id = o_id, x_name = o_name, o_id = x_id, o_name = x_name, updated_at = ? WHERE id = ? AND status = 'done'").bind(now, id).run();
-    await say();
-    if (!r.meta.changes) return;
-    return show(await getGame(env.DB, id));
-  }
+  if (act === 'n') return say('This game is over. Tap Play again to start a new one.');
   return say();
 }
