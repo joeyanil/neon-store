@@ -37,3 +37,10 @@
 - Cloudflare Workers Free: 100,000 requests a day, 50 database/network calls per run (the 5-minute job therefore handles a few orders per run and catches up), D1 free storage 5 GB.
 - Receipts live in Telegram. Telegram lets a bot delete its own messages only for 48 hours, so receipt files stay in the owner's chat; the order keeps working either way.
 - Backups: D1 keeps point-in-time history for a limited time on the free plan. Export the database now and then (`wrangler d1 export neon-p2p --remote --output backup.sql`).
+
+## XO game (advertising)
+
+1. In @BotFather send `/setinline`, pick your bot, and set the placeholder to `Play XO`.
+2. Open `/connect` once (or wait for the 5-minute job) so Telegram starts sending inline requests to the bot.
+3. In any chat type `@YourBot` and choose "Play XO". The first person to tap Play is ❌, the next to tap Join is ⭕.
+4. Each game is one small database row, deleted after 2 days. At most 2,000 new games are accepted per day.

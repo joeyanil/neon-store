@@ -68,6 +68,7 @@ export default {
     if (p) console.log(`removed ${p} old proof(s)`);
     const gone = await purgeOldData(env, now).catch((err) => { console.warn('purgeOldData failed', String(err?.message || err)); return null; });
     if (gone && (gone.orders || gone.tickets || gone.logs)) console.log(`deleted ${gone.orders} order(s), ${gone.tickets} ticket(s), ${gone.logs} log row(s)`);
+    await env.DB.prepare('DELETE FROM games WHERE created_at < ?').bind(now - 2 * 86400).run().catch(() => {});
     await checkStorage(env, tg, now).catch((err) => console.warn('checkStorage failed', String(err?.message || err)));
   },
 };

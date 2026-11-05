@@ -389,9 +389,13 @@ async function handleReference(env, tg, msg, orderId, text) {
 }
 
 /** Entry point for Telegram webhook updates. Never throws, so Telegram does not retry in a loop. */
+import { handleGameCallback, handleInlineQuery } from './games.js';
+
 export async function handleUpdate(env, tg, update) {
   try {
-    if (update.callback_query) await handleCallback(env, tg, update.callback_query);
+    if (update.inline_query) await handleInlineQuery(env, tg, update.inline_query);
+    else if (update.callback_query?.inline_message_id) await handleGameCallback(env, tg, update.callback_query);
+    else if (update.callback_query) await handleCallback(env, tg, update.callback_query);
     else if (update.message) await handleMessage(env, tg, update.message);
   } catch (err) {
     console.error('update failed', update.update_id, String(err?.stack || err));

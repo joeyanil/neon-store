@@ -1144,6 +1144,40 @@ async function main() {
     assert.equal(sm.reviews.average, 4);
     assert.ok(sm.storage.bytes > 0 && sm.storage.limit === 500 * 1024 * 1024, 'the storage meter has a size');
   });
+  console.log('\nXO game');
+  await step('XO game: inline offer, two players, win, rematch, full-game rules', async () => {
+    await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq1', from: ALICE, query: '', offset: '' } });
+    const iq = lastPayload('answerInlineQuery');
+    assert.equal(iq.cache_time, 0);
+    assert.match(iq.results[0].title, /Play XO/);
+    const imid = 'inl-1';
+    const tap = (from, data) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data, inline_message_id: imid } });
+    const shown = () => lastPayload('editMessageText', (p) => p.inline_message_id === imid);
+    await tap(ALICE, 'xo:s');
+    assert.match(shown().text, /Alice is waiting/);
+    await tap(ALICE, 'xo:j');
+    assert.match(lastPayload('answerCallbackQuery').text, /Wait for a friend/);
+    await tap(BOB, 'xo:j');
+    assert.match(shown().text, /Alice[\s\S]*Bob/);
+    await tap(BOB, 'xo:m:0'); // not Bob's turn
+    assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
+    for (const [u, c] of [[ALICE, 0], [BOB, 3], [ALICE, 1], [BOB, 4]]) await tap(u, `xo:m:${c}`);
+    const third = { id: 111777, first_name: 'Carl' };
+    await tap(third, 'xo:m:8');
+    assert.match(lastPayload('answerCallbackQuery').text, /two players/);
+    await tap(ALICE, 'xo:m:3');
+    assert.match(lastPayload('answerCallbackQuery').text, /taken/);
+    await tap(ALICE, 'xo:m:2');
+    assert.match(shown().text, /Alice wins/);
+    assert.ok(JSON.stringify(shown().reply_markup).includes('xo:r'));
+    await tap(BOB, 'xo:r');
+    assert.match(shown().text, /Bob\s*vs\s*.*Alice/s, 'sides swap on rematch');
+    await tap(BOB, 'xo:m:4'); // Bob is X now
+    assert.match(shown().text, /Turn: .*Alice/);
+    await tap(ALICE, 'xo:s');
+    assert.match(lastPayload('answerCallbackQuery').text, /already started/);
+  });
+
   await step('Telegram messages with a wrong or missing secret are refused', async () => {
     const upd = { update_id: nextUpdateId(), message: { message_id: 9, from: ALICE, chat: { id: ALICE.id, type: 'private' }, text: '/start' } };
     assert.equal((await webhook(upd, 'wrong')).status, 403);

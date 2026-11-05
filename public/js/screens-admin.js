@@ -88,7 +88,7 @@ export function adminHomeScreen(ctx) {
         h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'USDT traded'), h('span', { class: 'num' }, usdt(sm.last_24h.usdt_micro))),
         h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'Customer rating'),
           r.count ? h('span', { class: 'rating-chip' }, icon('star', 16), `${r.average} · ${r.count} review${r.count === 1 ? '' : 's'}`) : h('span', { class: 'tiny' }, 'No reviews yet')),
-        isOwner && sm.storage.bytes ? storageLine(sm.storage) : null,
+        ...(isOwner && sm.storage.bytes ? [storageLine(sm.storage)] : []),
         ...(sm.paused ? [h('div', { class: 'notice warn' }, icon('alert', 20), 'The shop is paused. Customers cannot start new orders.')] : []));
       links.replaceChildren(...[
         isOwner ? listRow({ title: 'Shop settings', sub: sm.paused ? 'Shop is paused' : 'Rates, accounts, services, channels, team', lead: h('span', { class: 'side-dot tone-blue' }, icon('settings', 20)), onClick: () => ctx.go('/admin/settings') }) : null,

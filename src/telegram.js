@@ -109,6 +109,18 @@ export class Telegram {
     return this.call('getMe', {});
   }
 
+  answerInlineQuery(id, results) {
+    return this.call('answerInlineQuery', { inline_query_id: id, results, cache_time: 0, is_personal: true });
+  }
+
+  /** Edits a message that was sent through inline mode (it has no chat id, only an inline message id). */
+  editInlineMessage(inlineMessageId, text, replyMarkup) {
+    return this.call('editMessageText', {
+      inline_message_id: inlineMessageId, text, parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true }, reply_markup: replyMarkup,
+    });
+  }
+
   answerCallbackQuery(id, text, showAlert = false) {
     return this.call('answerCallbackQuery', { callback_query_id: id, text, show_alert: showAlert });
   }

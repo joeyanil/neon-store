@@ -36,7 +36,7 @@ async function connect(env, tg, origin) {
   if (me) {
     const secret = await webhookSecret(env);
     // Pending messages are kept (not dropped), so a /start sent while the bot was silent is answered.
-    await run('Webhook registered', () => tg.call('setWebhook', { url: hookUrl(origin), secret_token: secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: false }));
+    await run('Webhook registered', () => tg.call('setWebhook', { url: hookUrl(origin), secret_token: secret, allowed_updates: ['message', 'callback_query', 'inline_query'], drop_pending_updates: false }));
     await run('"Open App" button added next to the typing box', () => tg.call('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Open App', web_app: { url: origin } } }));
     await run('Command list set', () => tg.call('setMyCommands', { commands: COMMANDS }));
     await run('Address saved', () => setSetting(env.DB, 'webapp_url', origin));
@@ -96,7 +96,7 @@ export async function ensureWebhook(env, tg, now) {
   const info = await tg.getWebhookInfo();
   const refused = info.last_error_message && /403|forbidden/i.test(info.last_error_message) && now - (info.last_error_date || 0) < 900;
   if (info.url === hookUrl(origin) && !refused) return false;
-  await tg.call('setWebhook', { url: hookUrl(origin), secret_token: await webhookSecret(env), allowed_updates: ['message', 'callback_query'], drop_pending_updates: false });
+  await tg.call('setWebhook', { url: hookUrl(origin), secret_token: await webhookSecret(env), allowed_updates: ['message', 'callback_query', 'inline_query'], drop_pending_updates: false });
   console.log('webhook re-registered');
   return true;
 }
