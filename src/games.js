@@ -4,7 +4,7 @@ import { esc } from './telegram.js';
 
 const DAILY_CAP = 2000; // new games per 24 hours; a safety net for the free plan
 const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-const MARK = { X: '🔵', O: '🟠', '.': '⬜' };
+const MARK = { X: 'X', O: 'O', '.': '·' };
 const PROMO = '🎮 <i>Neon Store · USDT and social media services</i>';
 
 export const nameOf = (u) => String([u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'Player').replace(/\s+/g, ' ').trim().slice(0, 20);
@@ -15,10 +15,10 @@ export function winnerOf(board) {
 }
 
 function view(g) {
-  const x = `🔵 ${esc(g.x_name)}`;
-  const o = g.o_id ? `🟠 ${esc(g.o_name)}` : '🟠 …';
+  const x = `X · ${esc(g.x_name)}`;
+  const o = g.o_id ? `O · ${esc(g.o_name)}` : 'O · …';
   if (g.status === 'wait') {
-    return { text: `<b>Tic-Tac-Toe</b>\n${x} is waiting for an opponent.\n\n${PROMO}`, markup: { inline_keyboard: [[{ text: '🟠 Join the game', callback_data: 'xo:j' }]] } };
+    return { text: `<b>Tic-Tac-Toe</b>\n${x} is waiting for an opponent.\n\n${PROMO}`, markup: { inline_keyboard: [[{ text: 'Join as O', callback_data: 'xo:j' }]] } };
   }
   const rows = [0, 3, 6].map((r) => [0, 1, 2].map((c) => ({ text: MARK[g.board[r + c]], callback_data: `xo:m:${r + c}` })));
   let line;
@@ -31,9 +31,9 @@ function view(g) {
 
 /** Someone typed @bot in a chat: offer one game. */
 export async function handleInlineQuery(env, tg, q) {
-  const text = `<b>Tic-Tac-Toe</b>\nTap Play to start. The first person to tap is 🔵, the next is 🟠.\n\n${PROMO}`;
+  const text = `<b>Tic-Tac-Toe</b>\nTap Play to start. The first person to tap is X, the next is O.\n\n${PROMO}`;
   await tg.answerInlineQuery(q.id, [{
-    type: 'article', id: `xo${Date.now().toString(36)}`, title: '🔵🟠 Play XO', description: 'Tic-tac-toe with a friend in this chat',
+    type: 'article', id: `xo${Date.now().toString(36)}`, title: 'Play XO', description: 'Tic-tac-toe with a friend in this chat',
     input_message_content: { message_text: text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
     reply_markup: { inline_keyboard: [[{ text: '▶️ Play', callback_data: 'xo:s' }]] },
   }]);

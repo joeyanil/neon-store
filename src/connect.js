@@ -95,7 +95,8 @@ export async function ensureWebhook(env, tg, now) {
   if (!/^https?:\/\/[^/]+$/.test(origin) || /YOUR-SUBDOMAIN/.test(origin)) return false; // not connected yet: /connect has not been opened
   const info = await tg.getWebhookInfo();
   const refused = info.last_error_message && /403|forbidden/i.test(info.last_error_message) && now - (info.last_error_date || 0) < 900;
-  if (info.url === hookUrl(origin) && !refused) return false;
+  const missingInline = Array.isArray(info.allowed_updates) && !info.allowed_updates.includes('inline_query'); // webhook set up before the XO game existed
+  if (info.url === hookUrl(origin) && !refused && !missingInline) return false;
   await tg.call('setWebhook', { url: hookUrl(origin), secret_token: await webhookSecret(env), allowed_updates: ['message', 'callback_query', 'inline_query'], drop_pending_updates: false });
   console.log('webhook re-registered');
   return true;

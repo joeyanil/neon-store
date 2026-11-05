@@ -59,7 +59,7 @@ const fakeTelegram = createServer(async (req, res) => {
   let result = true;
   if (method === 'sendMessage') result = { message_id: ++msgId };
   if (method === 'getFile') result = { file_id: payload.file_id, file_path: `photos/${payload.file_id}.png`, file_size: 70 };
-  if (method === 'setWebhook') fakeWebhook.url = payload.url;
+  if (method === 'setWebhook') { fakeWebhook.url = payload.url; fakeWebhook.allowed_updates = payload.allowed_updates; }
   if (method === 'getWebhookInfo') result = { ...fakeWebhook };
   if (method === 'getMe') result = { id: 1, is_bot: true, username: 'neon_test_bot' };
   if (method === 'sendDocument') { const id = ++msgId; result = { message_id: id, document: { file_id: `doc_${id}` } }; }
