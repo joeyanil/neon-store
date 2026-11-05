@@ -1,6 +1,7 @@
 // Everything the admin area needs from the database: accounts, networks, team, settings, queue and setup progress.
 // No Telegram calls here (see service.js for those).
 import { chatOf, parseRef } from './channels.js';
+import { DB_LIMIT_BYTES } from './retention.js';
 import { ApiError } from './http.js';
 import { formatEtb, parseRate, parseUsdt } from './money.js';
 import {
@@ -241,7 +242,7 @@ export function settingsView(s) {
   return {
     buy_rate_cents: s.buy_rate_cents, sell_rate_cents: s.sell_rate_cents, rate_updated_at: s.rate_updated_at,
     min_usdt_micro: s.min_usdt_micro, max_usdt_micro: s.max_usdt_micro, order_ttl_min: s.order_ttl_min,
-    max_open_orders: s.max_open_orders, paused: s.paused, proof_retention_days: s.proof_retention_days,
+    max_open_orders: s.max_open_orders, paused: s.paused, proof_retention_days: s.proof_retention_days, data_retention_days: s.data_retention_days,
     stock_usdt_micro: s.stock_usdt_micro, stock_show: s.stock_show, stock_add_on_sell: s.stock_add_on_sell,
     channel_ref: s.channel_ref, reviews_ref: s.reviews_ref, logs_ref: s.logs_ref,
   };
@@ -281,6 +282,8 @@ export async function updateSettings(db, actor, body, now = nowSec()) {
   if (maxOpen !== null) { await setSetting(db, 'max_open_orders', maxOpen, now); changes.push(`max_open ${maxOpen}`); }
   const keep = intField('proof_retention_days', 'proof_retention_days', 0, 3650, 'Keep proofs for');
   if (keep !== null) { await setSetting(db, 'proof_retention_days', keep, now); changes.push(`retention ${keep}`); }
+  const dataKeep = intField('data_retention_days', 'data_retention_days', 30, 730, 'Keep order records for');
+  if (dataKeep !== null) { await setSetting(db, 'data_retention_days', dataKeep, now); changes.push(`records ${dataKeep} days`); }
   if (body.stock_usdt !== undefined) {
     // '' or null switches tracking off; a number (0 allowed) is what the shop holds right now.
     if (body.stock_usdt === '' || body.stock_usdt === null) await setSetting(db, 'stock_usdt_micro', '', now);
@@ -353,11 +356,13 @@ export async function adminSummary(db) {
   const todayStart = nowSec() - 86400;
   const day = await db.prepare("SELECT COUNT(*) AS orders, COALESCE(SUM(usdt_micro), 0) AS usdt FROM orders WHERE status = 'completed' AND updated_at >= ?").bind(todayStart).first();
   const tickets = await db.prepare("SELECT COUNT(*) AS n FROM tickets WHERE status = 'open'").first();
-  const rv = await db.prepare('SELECT COUNT(rating) AS n, AVG(rating) AS avg FROM orders WHERE rating IS NOT NULL').first();
+  const cfg = await getSettings(db);
+  const rv = { n: cfg.review_count, avg: cfg.review_count ? cfg.review_sum / cfg.review_count : 0 };
   return {
     counts: { review: n.evidence_submitted || 0, release: n.processing || 0, waiting: n.awaiting_payment || 0, tickets: tickets.n },
     last_24h: { completed: day.orders, usdt_micro: day.usdt },
     reviews: { count: rv.n, average: rv.n ? Math.round(rv.avg * 10) / 10 : null },
+    storage: { bytes: cfg.db_bytes, limit: DB_LIMIT_BYTES, keep_days: cfg.data_retention_days },
     rate_updated_at: s.rate_updated_at,
     paused: s.paused,
   };

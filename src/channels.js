@@ -103,6 +103,10 @@ export async function saveReview(db, userId, orderId, rating, comment, now) {
   const res = await db.prepare("UPDATE orders SET rating = ?, review_text = ?, feedback_at = ? WHERE id = ? AND user_id = ? AND status = 'completed' AND rating IS NULL")
     .bind(rating, comment || null, now, orderId, userId).run();
   if (!res.meta?.changes) return null;
+  await db.batch([
+    db.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('review_count', '1', ?) ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1, updated_at = excluded.updated_at").bind(now),
+    db.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('review_sum', ?, ?) ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + excluded.value, updated_at = excluded.updated_at").bind(String(rating), now),
+  ]);
   return db.prepare('SELECT o.*, (SELECT label FROM usdt_networks WHERE code = o.network_code) AS network_label FROM orders o WHERE o.id = ?').bind(orderId).first();
 }
 

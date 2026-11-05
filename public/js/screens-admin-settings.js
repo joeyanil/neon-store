@@ -74,14 +74,15 @@ export function ratesSettingsScreen(ctx) {
       stock_usdt: textField({ label: 'USDT you hold right now', value: toUsdt(s.stock_usdt_micro), inputMode: 'decimal', suffix: 'USDT', placeholder: 'Leave empty to not track', hint: 'Goes down by itself when a buy is completed. You can type a new number any time.' }),
       order_ttl_min: textField({ label: 'Time customers have to pay', value: String(s.order_ttl_min), inputMode: 'numeric', suffix: 'min', hint: 'After this the order expires. A receipt sent late is still shown to you for 24 hours.' }),
       max_open_orders: textField({ label: 'Open orders per customer', value: String(s.max_open_orders), inputMode: 'numeric', hint: 'Stops one person from filling your queue.' }),
-      proof_retention_days: textField({ label: 'Keep proof images for', value: String(s.proof_retention_days), inputMode: 'numeric', suffix: 'days', hint: '0 keeps them forever. Orders stay; only the images are deleted.' }),
+      proof_retention_days: textField({ label: 'Keep proof images for', value: String(s.proof_retention_days), inputMode: 'numeric', suffix: 'days', hint: 'Only the images are removed. The order and its transaction numbers stay until the records are deleted below.' }),
+      data_retention_days: textField({ label: 'Keep order records for', value: String(s.data_retention_days), inputMode: 'numeric', suffix: 'days', hint: 'Finished orders, transaction numbers and closed tickets are deleted this many days after they end (30 to 730). Open orders are never deleted. This keeps the free storage from filling up.' }),
     };
     const stockShow = toggleRow({ label: 'Show stock to customers', hint: 'When off, customers never see the amount, not even in an error message.', value: s.stock_show });
     const addOnSell = toggleRow({ label: 'Add to stock when you buy USDT', hint: 'A completed sell order adds its USDT to the number above.', value: s.stock_add_on_sell });
     const paused = toggleRow({ label: 'Pause the shop', hint: 'Customers can still see their orders but cannot start new ones.', value: s.paused });
     save = async () => {
       const body = {
-        order_ttl_min: f.order_ttl_min.get(), max_open_orders: f.max_open_orders.get(), proof_retention_days: f.proof_retention_days.get(),
+        order_ttl_min: f.order_ttl_min.get(), max_open_orders: f.max_open_orders.get(), proof_retention_days: f.proof_retention_days.get(), data_retention_days: f.data_retention_days.get(),
         stock_usdt: f.stock_usdt.get(), stock_show: stockShow.get(), stock_add_on_sell: addOnSell.get(), paused: paused.get(),
       };
       if (f.buy_rate.get() || f.sell_rate.get()) { body.buy_rate = f.buy_rate.get(); body.sell_rate = f.sell_rate.get(); }
@@ -93,7 +94,7 @@ export function ratesSettingsScreen(ctx) {
       card(title('Rates'), h('p', { class: 'tiny' }, 'The two prices customers see on the home screen.'), f.buy_rate.el, f.sell_rate.el, h('p', { class: 'tiny' }, 'No fees are added. Whatever your exchange takes comes out of your own margin.')),
       card(title('Order size'), h('p', { class: 'tiny' }, 'The smallest and largest USDT amount in one order.'), f.min_usdt.el, f.max_usdt.el),
       card(title('Stock'), h('p', { class: 'tiny' }, 'Optional. Stops you from selling USDT you do not have.'), f.stock_usdt.el, stockShow.el, addOnSell.el),
-      card(title('Timing and limits'), h('p', { class: 'tiny' }, 'How long orders wait, and how long receipt images are kept.'), f.order_ttl_min.el, f.max_open_orders.el, f.proof_retention_days.el),
+      card(title('Timing and limits'), h('p', { class: 'tiny' }, 'How long orders wait, and how long receipts and records are kept.'), f.order_ttl_min.el, f.max_open_orders.el, f.proof_retention_days.el, f.data_retention_days.el),
       card(paused.el));
   });
   setActions({ text: 'Save', onClick: () => save?.() });

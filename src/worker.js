@@ -4,6 +4,7 @@ import { webhookSecret } from './secret.js';
 import { json } from './http.js';
 import { VERSION } from './version.js';
 import { purgeOldProofs } from './proofs.js';
+import { checkStorage, purgeOldData } from './retention.js';
 import { expireStaleOrders, handleUpdate, retryAlerts } from './service.js';
 import { Telegram } from './telegram.js';
 
@@ -65,5 +66,8 @@ export default {
     if (a) console.log(`re-sent ${a} alert(s)`);
     const p = await purgeOldProofs(env, now).catch((err) => { console.warn('purgeOldProofs failed', String(err?.message || err)); return 0; });
     if (p) console.log(`removed ${p} old proof(s)`);
+    const gone = await purgeOldData(env, now).catch((err) => { console.warn('purgeOldData failed', String(err?.message || err)); return null; });
+    if (gone && (gone.orders || gone.tickets || gone.logs)) console.log(`deleted ${gone.orders} order(s), ${gone.tickets} ticket(s), ${gone.logs} log row(s)`);
+    await checkStorage(env, tg, now).catch((err) => console.warn('checkStorage failed', String(err?.message || err)));
   },
 };

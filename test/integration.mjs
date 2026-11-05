@@ -1128,6 +1128,22 @@ async function main() {
     assert.equal((await api(STAFF, 'PUT', '/api/admin/settings', { paused: true })).status, 403);
     assert.equal((await api(STAFF, 'GET', '/api/admin/audit')).status, 403);
   });
+  await step('retention: old finished records are deleted, open ones stay, review average and storage meter survive', async () => {
+    assert.equal((await api(ADMIN, 'PUT', '/api/admin/settings', { data_retention_days: 10 })).status, 400, 'too short is refused');
+    assert.equal((await api(ADMIN, 'PUT', '/api/admin/settings', { data_retention_days: 120 })).status, 200);
+    const before = (await api(STAFF, 'GET', '/api/admin/orders?filter=all&q=TXN-FB-1')).body.orders.length;
+    assert.equal(before, 1);
+    for (let i = 0; i < 14; i++) await scheduledAt(Date.now() + 130 * 86400 * 1000 + i * 1000); // 130 days later: older than 120
+    const open = await api(ALICE, 'POST', '/api/orders', sBuy(9, '12'));
+    assert.equal(open.status, 201, JSON.stringify(open.body));
+    assert.equal((await api(STAFF, 'GET', '/api/admin/orders?filter=all&q=TXN-FB-1')).body.orders.length, 0, 'the old order and its transaction number are gone');
+    const now = await api(ALICE, 'GET', `/api/orders/${open.body.order.id}`);
+    assert.equal(now.status, 200, 'a recent order is untouched');
+    const sm = (await api(STAFF, 'GET', '/api/admin/summary')).body;
+    assert.equal(sm.reviews.count, 1, 'the review totals do not depend on old orders');
+    assert.equal(sm.reviews.average, 4);
+    assert.ok(sm.storage.bytes > 0 && sm.storage.limit === 500 * 1024 * 1024, 'the storage meter has a size');
+  });
   await step('Telegram messages with a wrong or missing secret are refused', async () => {
     const upd = { update_id: nextUpdateId(), message: { message_id: 9, from: ALICE, chat: { id: ALICE.id, type: 'private' }, text: '/start' } };
     assert.equal((await webhook(upd, 'wrong')).status, 403);

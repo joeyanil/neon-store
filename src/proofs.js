@@ -136,7 +136,10 @@ export async function proofResponse(env, db, orderId, proofId) {
 /** Retention job: forget (and where Telegram allows, delete) the images of long-finished orders. The order record and history stay. */
 export async function purgeOldProofs(env, now = nowSec(), limit = 10) {
   const { results: setting } = await env.DB.prepare("SELECT value FROM settings WHERE key = 'proof_retention_days'").all();
-  const days = Number(setting[0]?.value ?? 90);
+  const { results: keepRow } = await env.DB.prepare("SELECT value FROM settings WHERE key = 'data_retention_days'").all();
+  const recordDays = Number(keepRow[0]?.value ?? 120);
+  const own = Number(setting[0]?.value ?? 90);
+  const days = own > 0 ? Math.min(own, recordDays) : recordDays; // an image never outlives its order
   if (!(days > 0)) return 0;
   const cutoff = now - days * 86400;
   const { results } = await env.DB

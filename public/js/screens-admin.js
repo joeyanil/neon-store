@@ -24,6 +24,19 @@ const EMPTY = {
   all: 'No orders yet.',
 };
 
+/** How full the free database is. Old records are deleted automatically, so this should stay small. */
+function storageLine(st) {
+  const pct = Math.max(0, Math.min(100, (st.bytes / st.limit) * 100));
+  const mb = st.bytes / 1048576;
+  const level = pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok';
+  const fill = h('i');
+  fill.style.width = `${Math.max(2, pct)}%`; // set through the element, not as an attribute, because the page's content policy blocks inline styles
+  return h('div', { class: 'stack tight-stack' },
+    h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'Storage used'), h('span', { class: 'num' }, `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB of 500 MB`)),
+    h('div', { class: `meter ${level}`, role: 'img', 'aria-label': `${Math.round(pct)} percent of storage used` }, fill),
+    h('p', { class: 'tiny' }, `Finished orders are deleted ${st.keep_days} days after they end.`));
+}
+
 export function adminHomeScreen(ctx) {
   let filter = ctx.params.filter || 'review';
   let query = '';
@@ -75,6 +88,7 @@ export function adminHomeScreen(ctx) {
         h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'USDT traded'), h('span', { class: 'num' }, usdt(sm.last_24h.usdt_micro))),
         h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'Customer rating'),
           r.count ? h('span', { class: 'rating-chip' }, icon('star', 16), `${r.average} · ${r.count} review${r.count === 1 ? '' : 's'}`) : h('span', { class: 'tiny' }, 'No reviews yet')),
+        isOwner && sm.storage.bytes ? storageLine(sm.storage) : null,
         ...(sm.paused ? [h('div', { class: 'notice warn' }, icon('alert', 20), 'The shop is paused. Customers cannot start new orders.')] : []));
       links.replaceChildren(...[
         isOwner ? listRow({ title: 'Shop settings', sub: sm.paused ? 'Shop is paused' : 'Rates, accounts, services, channels, team', lead: h('span', { class: 'side-dot tone-blue' }, icon('settings', 20)), onClick: () => ctx.go('/admin/settings') }) : null,
