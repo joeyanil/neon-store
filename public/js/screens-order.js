@@ -2,6 +2,7 @@ import { api, serverNow } from './api.js';
 import { orderTitle, S } from './components.js';
 import { errorText, getLang, t } from './i18n.js';
 import { confirmDialog, haptic, setActions } from './tg.js';
+import { proofsSection } from './proofs-view.js';
 import { copyButton, copyText, countdown, etb, formatWhen, h, icon, isOpen, methodLabel, shrinkImage, skeletons, statusBadge, toast, usdt } from './ui.js';
 
 const plainEtb = (cents) => (cents / 100).toFixed(2);
@@ -147,19 +148,50 @@ export function orderScreen(ctx) {
       h('div', { class: 'row' }, h('div', { class: 'success-mark' }, icon('check', 40)),
         h('div', { class: 'grow' }, h('h2', { class: 'section-title' }, t(`done_title_${order.side}`)), h('p', { class: 'muted small' }, t(`done_body_${order.side}`)))),
       order.completion_ref ? copyRow(t('reference'), order.completion_ref) : null,
-      buy && order.usdt_address ? copyRow(t('row_address'), order.usdt_address) : null,
-      feedbackRow());
+      buy && order.usdt_address ? copyRow(t('row_address'), order.usdt_address) : null);
   }
 
-  function feedbackRow() {
-    if (order.feedback) return h('div', { class: 'notice' }, icon('check', 20), t(order.feedback === 'good' ? 'fb_thanks_good' : 'fb_thanks_bad'));
-    const send = async (verdict) => {
-      try { await api.sendFeedback(order.id, verdict); haptic.success(); toast(t('fb_thanks'), 'ok'); signature = ''; load({ quiet: true }); } catch (err) { toast(errorText(err), 'error'); }
-    };
-    return h('div', { class: 'stack' }, h('div', { class: 'strong' }, t('fb_ask')),
-      h('div', { class: 'row' },
-        h('button', { class: 'btn grow fb-good', type: 'button', onclick: () => send('good') }, icon('check', 18), t('fb_good')),
-        h('button', { class: 'btn grow fb-bad', type: 'button', onclick: () => send('bad') }, icon('alert', 18), t('fb_bad'))));
+  /** Stars 1 to 5 and an optional comment. Team members never see it, and the server refuses them anyway. */
+  function reviewCard() {
+    if (S.boot.role) return null;
+    if (order.rating) {
+      return h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, t('rv_yours')),
+        h('div', { class: 'stars done', 'aria-label': t('rv_stars', { n: order.rating }) }, [1, 2, 3, 4, 5].map((n) => h('span', { class: n <= order.rating ? 'on' : '' }, icon('star', 28)))),
+        order.review_text ? h('p', { class: 'review-quote' }, order.review_text) : null,
+        h('p', { class: 'tiny' }, t('rv_thanks')));
+    }
+    let picked = 0;
+    const comment = h('textarea', { rows: 3, maxLength: 300, placeholder: t('rv_comment_ph'), 'aria-label': t('rv_comment') });
+    const send = h('button', { class: 'btn primary block', type: 'button', disabled: true }, t('rv_send'));
+    const label = h('div', { class: 'tiny rv-label' }, t('rv_pick'));
+    const row = h('div', { class: 'stars', role: 'radiogroup', 'aria-label': t('rv_title') }, [1, 2, 3, 4, 5].map((n) => {
+      const b = h('button', { class: 'star', type: 'button', role: 'radio', 'aria-checked': 'false', 'aria-label': t('rv_stars', { n }) }, icon('star', 34));
+      b.addEventListener('click', () => {
+        haptic.select(); picked = n; send.disabled = false;
+        label.textContent = t(`rv_word_${n}`);
+        [...row.children].forEach((c, k) => { c.classList.toggle('on', k < n); c.setAttribute('aria-checked', String(k + 1 === n)); });
+      });
+      return b;
+    }));
+    send.addEventListener('click', async () => {
+      if (!picked || send.disabled) return;
+      send.disabled = true;
+      try {
+        await api.sendReview(order.id, picked, comment.value.trim());
+        haptic.success(); toast(t('rv_thanks'), 'ok'); signature = ''; load({ quiet: true });
+      } catch (err) { send.disabled = false; toast(errorText(err), 'error'); }
+    });
+    return h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, t('rv_title')), h('p', { class: 'muted small' }, t('rv_sub')), row, label,
+      h('div', { class: 'well input-wrap' }, comment), send);
+  }
+
+  /** Everything the customer agreed to and sent: how they paid, where it goes, and their receipts. */
+  function detailsCard() {
+    const rows = [[t('row_method'), methodLabel(order.method, getLang())]];
+    if (order.side === 'buy') rows.push([t('row_network'), order.network_label], [t('row_address'), order.usdt_address]);
+    if (order.side === 'sell') rows.push([t('row_network'), order.network_label], [t('row_payout'), `${order.payout_name} · ${order.payout_account}`]);
+    return h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, t('details_title')),
+      h('dl', { class: 'kv' }, rows.map(([k, v]) => [h('dt', null, k), h('dd', { class: 'break' }, v)])));
   }
 
   // ----- render -----
@@ -189,13 +221,16 @@ export function orderScreen(ctx) {
         h('div', { class: 'notice' }, icon('shield', 20), h('div', null, h('div', { class: 'strong' }, t(`proc_title_${order.side}`)), h('div', null, t(`proc_body_${order.side}`)))),
         order.completion_ref ? copyRow(t('reference'), order.completion_ref) : null));
     } else if (s === 'completed') {
-      body.append(doneCard());
+      body.append(...[doneCard(), reviewCard()].filter(Boolean));
     } else if (s === 'rejected') body.append(ended('rejected_title', 'rejected_body', 'warn'));
     else if (s === 'expired') {
       body.append(ended('expired_title', 'expired_body', 'warn'));
       if (lateOk()) body.append(h('div', { class: 'notice' }, icon('info', 20), t('late_paid_hint')), evidenceCard());
     }
     else if (s === 'cancelled') body.append(ended('cancelled_title', 'cancelled_body', ''));
+    if (s !== 'awaiting_payment' && s !== 'cancelled') body.append(detailsCard());
+    const receipts = proofsSection(order.id, order.proofs, { retentionDays: S.boot.proof_retention_days, urls: imageUrls });
+    if (receipts) body.append(receipts);
     body.append(timeline());
     syncActions();
   }
@@ -251,6 +286,7 @@ export function orderScreen(ctx) {
     timerEl.classList.toggle('low', left < 120);
     if (left <= 0 && !tickTimer.fired) { tickTimer.fired = true; load(); syncActions(); }
   }
+  const imageUrls = [];
   const clock = setInterval(tickTimer, 1000);
   const poll = setInterval(() => { if (!document.hidden && order && isOpen(order.status) && !busy) load({ quiet: true }); }, 8000);
 
@@ -262,6 +298,7 @@ export function orderScreen(ctx) {
       dead = true;
       clearInterval(clock); clearInterval(poll);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
+      imageUrls.forEach((u) => URL.revokeObjectURL(u));
     },
   };
 }

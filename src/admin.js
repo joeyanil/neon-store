@@ -353,9 +353,11 @@ export async function adminSummary(db) {
   const todayStart = nowSec() - 86400;
   const day = await db.prepare("SELECT COUNT(*) AS orders, COALESCE(SUM(usdt_micro), 0) AS usdt FROM orders WHERE status = 'completed' AND updated_at >= ?").bind(todayStart).first();
   const tickets = await db.prepare("SELECT COUNT(*) AS n FROM tickets WHERE status = 'open'").first();
+  const rv = await db.prepare('SELECT COUNT(rating) AS n, AVG(rating) AS avg FROM orders WHERE rating IS NOT NULL').first();
   return {
     counts: { review: n.evidence_submitted || 0, release: n.processing || 0, waiting: n.awaiting_payment || 0, tickets: tickets.n },
     last_24h: { completed: day.orders, usdt_micro: day.usdt },
+    reviews: { count: rv.n, average: rv.n ? Math.round(rv.avg * 10) / 10 : null },
     rate_updated_at: s.rate_updated_at,
     paused: s.paused,
   };
@@ -367,12 +369,12 @@ function queueRow(r) {
   return {
     id: r.id, side: r.side, status: r.status, usdt_micro: r.usdt_micro, etb_cents: r.etb_cents,
     method: { code: r.method_code, label_en: r.method_label_en, label_am: r.method_label_am || r.method_label_en },
-    service: r.service_code, quantity: r.quantity, late: r.late === 1, evidence_count: r.evidence_count, created_at: r.created_at, updated_at: r.updated_at,
+    service: r.service_code, quantity: r.quantity, rating: r.rating || null, late: r.late === 1, evidence_count: r.evidence_count, created_at: r.created_at, updated_at: r.updated_at,
     customer: customerOf(r),
   };
 }
 
-export async function adminListOrders(db, filter, before, limit = 30) {
+export async function adminListOrders(db, filter, before, limit = 30, q = '') {
   const base = `${ORDER_SELECT.replace('FROM orders o', ', u.first_name, u.username FROM orders o')} JOIN users u ON u.id = o.user_id`;
   let where;
   let order;
@@ -381,7 +383,14 @@ export async function adminListOrders(db, filter, before, limit = 30) {
   else if (filter === 'release') { where = "o.status = 'processing'"; order = 'o.updated_at ASC, o.id'; }
   else if (filter === 'done') { where = "o.status IN ('completed','rejected','cancelled','expired')"; order = 'o.updated_at DESC, o.id DESC'; }
   else { where = `o.status IN (${OPEN_STATUSES.map(() => '?').join(',')})`; args.push(...OPEN_STATUSES); order = 'o.created_at DESC, o.id DESC'; }
-  const paged = filter === 'done' || filter === 'open';
+  const term = String(q || '').trim().slice(0, 60);
+  if (filter === 'all' || term) { where = '1 = 1'; order = 'o.created_at DESC, o.id DESC'; filter = 'all'; args.length = 0; }
+  if (term) {
+    const like = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    where += " AND (o.id LIKE ? ESCAPE '\\' OR CAST(o.user_id AS TEXT) = ? OR u.username LIKE ? ESCAPE '\\' OR u.first_name LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM order_proofs p WHERE p.order_id = o.id AND p.ref_text LIKE ? ESCAPE '\\') OR o.completion_ref LIKE ? ESCAPE '\\')";
+    args.push(like, term.replace(/^@/, ''), like.replace(/^%@/, '%'), like, like, like);
+  }
+  const paged = filter === 'done' || filter === 'open' || filter === 'all';
   if (paged && before) { where += filter === 'done' ? ' AND o.updated_at < ?' : ' AND o.created_at < ?'; args.push(Number(before)); }
   const { results } = await db.prepare(`${base} WHERE ${where} ORDER BY ${order} LIMIT ?`).bind(...args, limit + 1).all();
   const page = results.slice(0, limit);

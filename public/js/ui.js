@@ -32,6 +32,7 @@ const P = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   back: '<path d="m15.25 5.5-6.5 6.5 6.5 6.5"/>',
   chevron: '<path d="m8.75 5.5 6.5 6.5-6.5 6.5"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
   note: '<path d="M10 17V6.5l8-2V15"/><circle cx="7.5" cy="17" r="2.5"/><circle cx="15.5" cy="15" r="2.5"/>',
   play: '<rect x="3.5" y="6" width="17" height="12" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>',
   star: '<path d="m12 4 2.4 5 5.4.7-4 3.7 1 5.4L12 16.1l-4.8 2.7 1-5.4-4-3.7 5.4-.7z"/>',

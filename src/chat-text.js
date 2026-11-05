@@ -8,6 +8,9 @@ export const etb = (c) => formatEtb(c);
 const EN = {
   menuTitle: 'Neon Store',
   menuIntro: 'Swap USDT and birr, or grow your social pages. A person checks every order.',
+  reviewThanks: (n) => `Thanks for rating this order ${'⭐'.repeat(n)}${'☆'.repeat(5 - n)}\n\nWant to add a short comment? Type it now, or tap Skip.`,
+  reviewDone: 'Thanks. Your comment was added to your review.',
+  reviewNo: (code) => ({ team_cannot_review: 'Team members cannot review orders.', already_reviewed: 'You already reviewed this order.', not_completed: 'You can review an order once it is completed.', not_found: 'That order is not yours to review.' }[code] || 'This review could not be saved.'),
   welcome: (name) => `<b>Welcome to Neon Store${name ? `, ${esc(name)}` : ''}</b>\n\nHere you can buy or sell USDT with birr, and order followers, views and members for Telegram, Instagram, TikTok and YouTube.\n\n<b>How it works</b>\n1. Pick what you need below.\n2. Pay by bank or mobile money and send your proof.\n3. A person checks it, and your USDT, birr or service arrives here.\n\nStuck at any point? Tap Support.`,
   btn: {
     buy: '🛒 Buy USDT', sell: '💸 Sell USDT', services: '🛍 Social services', rates: '📈 Rates', orders: '📦 My orders', support: '🎧 Support', policies: '📜 Policies',

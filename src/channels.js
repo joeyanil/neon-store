@@ -27,41 +27,87 @@ export function maskId(id) {
   return s.length <= 4 ? `${s[0]}***` : `${s.slice(0, 3)}***${s.slice(-2)}`;
 }
 
+function snapshot(order) {
+  try { return JSON.parse(order.pay_snapshot || '{}'); } catch { return {}; }
+}
+
+/** What was ordered, in one line a stranger can read: "Telegram Members × 1,000" or "Buy 25 USDT". */
 export function productLine(order) {
-  let pay = {};
-  try { pay = JSON.parse(order.pay_snapshot || '{}'); } catch { /* old rows */ }
+  const pay = snapshot(order);
   if (order.side === 'service') return `${esc(pay.service?.name_en || order.service_code || 'Service')} × ${Number(order.quantity).toLocaleString('en-US')}`;
   return `${order.side === 'buy' ? 'Buy' : 'Sell'} ${formatUsdt(order.usdt_micro)} USDT`;
 }
 
+const when = (sec) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Addis_Ababa', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(sec * 1000));
+const duration = (sec) => (sec < 90 ? 'under a minute' : sec < 5400 ? `${Math.round(sec / 60)} min` : sec < 172800 ? `${Math.round(sec / 3600)} h` : `${Math.round(sec / 86400)} days`);
+const methodName = (order) => order.method_label_en || snapshot(order).label_en || order.method_code || '';
+
 async function post(tg, ref, text) {
   const chat = chatOf(ref);
-  if (!chat) return false;
+  if (!chat) return null;
   try {
-    await tg.sendMessage(chat, text);
-    return true;
+    return await tg.sendMessage(chat, text);
   } catch (err) {
     console.warn('channel post failed', ref, String(err?.message || err));
-    return false;
+    return null;
   }
 }
 
-/** kind: 'pending' when the order is placed, 'purchase' when it is completed. */
+/** The post under "Bot logs". It never names the customer. kind: 'pending' when the order is placed, 'purchase' when it is finished. */
+export function logText(kind, order, now = Math.floor(Date.now() / 1000)) {
+  const done = kind === 'purchase';
+  const lines = [done ? '✅ <b>Order completed</b>' : '🕓 <b>New order, waiting for payment</b>', ''];
+  lines.push(`🧾 Order: <code>${esc(order.id)}</code>`, `👤 Customer: <code>${maskId(order.user_id)}</code>`, `📦 ${productLine(order)}`);
+  if (order.side !== 'service') lines.push(`🌐 Network: ${esc(order.network_label || order.network_code || '')}`);
+  lines.push(`💰 Total: ${formatEtb(order.etb_cents)} ETB${methodName(order) ? ` via ${esc(methodName(order))}` : ''}`);
+  lines.push(done ? `⏱ Finished in ${duration(Math.max(0, (order.updated_at || now) - order.created_at))}` : `⏱ Placed: ${when(order.created_at)}`);
+  if (done) lines.push(`📅 ${when(order.updated_at || now)}`);
+  return lines.join('\n');
+}
+
 export async function postLog(tg, settings, kind, order) {
   if (!chatOf(settings.logs_ref)) return false;
-  const title = kind === 'purchase' ? '✅ <b>New purchase</b>' : '🕓 <b>New pending order</b>';
-  return post(tg, settings.logs_ref, [title, `Customer: <code>${maskId(order.user_id)}</code>`, `Product: ${productLine(order)}`, `Total: ${formatEtb(order.etb_cents)} ETB`].join('\n'));
+  return Boolean(await post(tg, settings.logs_ref, logText(kind, order)));
 }
 
-export async function postFeedback(tg, settings, order, good) {
-  if (!chatOf(settings.reviews_ref)) return false;
-  return post(tg, settings.reviews_ref, [good ? '👍 <b>New feedback: good</b>' : '👎 <b>New feedback: bad</b>', `Customer: <code>${maskId(order.user_id)}</code>`, `Product: ${productLine(order)}`, `Order: ${esc(order.id)}`].join('\n'));
+export const STAR_WORDS = ['', 'Bad', 'Poor', 'Okay', 'Good', 'Excellent'];
+export const stars = (n) => '⭐'.repeat(n) + '☆'.repeat(5 - n);
+
+export function reviewText(order, rating, comment) {
+  const lines = [`${stars(rating)}  <b>${rating} out of 5 · ${STAR_WORDS[rating]}</b>`, '', '📝 <b>New customer review</b>', '',
+    `📦 ${productLine(order)}`, `👤 Customer: <code>${maskId(order.user_id)}</code>`, `🧾 Order: <code>${esc(order.id)}</code>`];
+  if (comment) lines.push('', `💬 “${esc(comment)}”`);
+  return lines.join('\n');
 }
 
-/** Saves the customer's verdict once. Returns the order when this call saved it, otherwise null. */
-export async function saveFeedback(db, userId, orderId, good, now) {
-  const res = await db.prepare("UPDATE orders SET feedback = ?, feedback_at = ? WHERE id = ? AND user_id = ? AND status = 'completed' AND feedback IS NULL")
-    .bind(good ? 'good' : 'bad', now, orderId, userId).run();
+/** Posts the review to the reviews channel and returns the message id (so a comment added later can be put on the same post). */
+export async function postReview(tg, settings, order, rating, comment) {
+  const sent = await post(tg, settings.reviews_ref, reviewText(order, rating, comment));
+  return sent?.message_id ?? null;
+}
+
+export async function editReview(tg, settings, order, rating, comment, messageId) {
+  const chat = chatOf(settings.reviews_ref);
+  if (!chat || !messageId) return false;
+  try { await tg.editMessageText(chat, messageId, reviewText(order, rating, comment)); return true; } catch (err) { console.warn('review edit failed', String(err?.message || err)); return false; }
+}
+
+export const cleanComment = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+
+/**
+ * Saves a customer's review once. Only the customer who placed a completed order can leave it, and never anyone on the team.
+ * Returns the updated order, or null when it was not allowed or already given.
+ */
+export async function saveReview(db, userId, orderId, rating, comment, now) {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return null;
+  const res = await db.prepare("UPDATE orders SET rating = ?, review_text = ?, feedback_at = ? WHERE id = ? AND user_id = ? AND status = 'completed' AND rating IS NULL")
+    .bind(rating, comment || null, now, orderId, userId).run();
+  if (!res.meta?.changes) return null;
+  return db.prepare('SELECT o.*, (SELECT label FROM usdt_networks WHERE code = o.network_code) AS network_label FROM orders o WHERE o.id = ?').bind(orderId).first();
+}
+
+export async function addReviewComment(db, userId, orderId, comment) {
+  const res = await db.prepare("UPDATE orders SET review_text = ? WHERE id = ? AND user_id = ? AND rating IS NOT NULL AND review_text IS NULL").bind(comment, orderId, userId).run();
   if (!res.meta?.changes) return null;
   return db.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first();
 }

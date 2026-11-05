@@ -37,9 +37,9 @@ export async function handleAdmin(request, env, tg, { user, role, path }) {
   if (rest === 'summary' && method === 'GET') return json({ ...(await adminSummary(db)), role, server_time: nowSec() });
 
   if (rest === 'orders' && method === 'GET') {
-    const filter = ['review', 'release', 'open', 'done'].includes(url.searchParams.get('filter')) ? url.searchParams.get('filter') : 'review';
+    const filter = ['review', 'release', 'open', 'done', 'all'].includes(url.searchParams.get('filter')) ? url.searchParams.get('filter') : 'review';
     const before = url.searchParams.get('before');
-    return json({ ...(await adminListOrders(db, filter, before && /^\d+$/.test(before) ? before : null)), server_time: nowSec() });
+    return json({ ...(await adminListOrders(db, filter, before && /^\d+$/.test(before) ? before : null, 30, url.searchParams.get('q') || '')), server_time: nowSec() });
   }
 
   let m = /^orders\/([^/]+)(?:\/(confirm|release|reject))?$/.exec(rest);
@@ -91,6 +91,7 @@ export async function handleAdmin(request, env, tg, { user, role, path }) {
 
   m = /^customers\/(\d+)\/block$/.exec(rest);
   if (m && method === 'POST') {
+    needOwner(role); // blocking a customer is the owner's decision
     const b = await body();
     await setBlocked(db, user.id, Number(m[1]), b.blocked === true);
     return json({ blocked: b.blocked === true });

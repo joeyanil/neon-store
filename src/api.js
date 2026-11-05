@@ -3,11 +3,11 @@ import { AuthError, validateInitData } from './auth.js';
 import { ApiError, errorResponse, json, readJson } from './http.js';
 import { handleAdmin } from './admin-api.js';
 import { getRole } from './admin.js';
-import { links, postFeedback, postLog, saveFeedback } from './channels.js';
+import { links, postLog } from './channels.js';
 import { createOrder } from './create.js';
 import { customerStats, getCatalog, getOrderRow, getSettings, listOrders, nowSec, sideAvailability, stockInfo } from './orders.js';
 import { proofResponse } from './proofs.js';
-import { cancelOrder, customerOrderView, submitEvidence } from './service.js';
+import { cancelOrder, customerOrderView, leaveReview, submitEvidence } from './service.js';
 import { listPolicies } from './shop-admin.js';
 import { createTicket, customerReply, getTicket, isTicketId, listTickets, threadOf, ticketDetail, ticketPhoto } from './tickets.js';
 import { isOrderId } from './validate.js';
@@ -95,6 +95,7 @@ export async function handleApi(request, env, tg) {
         catalog,
         support: { username: env.SUPPORT_USERNAME || null },
         links: links(s),
+        proof_retention_days: s.proof_retention_days,
         server_time: nowSec(),
       });
     }
@@ -119,15 +120,11 @@ export async function handleApi(request, env, tg) {
       return json({ order: await customerOrderView(db, row), server_time: nowSec() }, 201);
     }
 
-    const fb = path.match(/^\/api\/orders\/(NG-[A-Z0-9]{6})\/feedback$/);
-    if (fb && method === 'POST') {
-      const body = await readJson(request);
-      if (body.verdict !== 'good' && body.verdict !== 'bad') throw new ApiError(400, 'invalid_field', 'Choose good or bad.', { field: 'verdict' });
-      const saved = await saveFeedback(db, user.id, fb[1], body.verdict === 'good', nowSec());
-      if (saved) await postFeedback(tg, await getSettings(db), saved, body.verdict === 'good').catch(() => {});
-      const row = await getOrderRow(db, fb[1]);
-      if (!row || row.user_id !== user.id) throw new ApiError(404, 'not_found', 'Order not found.');
-      return json({ feedback: row.feedback });
+    const rv = path.match(/^\/api\/orders\/(NG-[A-Z0-9]{6})\/review$/);
+    if (rv && method === 'POST') {
+      const b = await readJson(request);
+      const order = await leaveReview(env, tg, user.id, rv[1], b.rating, b.comment);
+      return json({ rating: order.rating, comment: order.review_text });
     }
 
     if (path === '/api/orders' && method === 'GET') {

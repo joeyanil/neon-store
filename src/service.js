@@ -1,7 +1,7 @@
 // Business flows that touch both the database and Telegram: proof submission, admin actions,
 // alerts and customer notifications, expiry, and the bot's webhook.
 import { adminSummary, allAdminIds, audit, getRole } from './admin.js';
-import { postLog } from './channels.js';
+import { addReviewComment, cleanComment, editReview, postLog, postReview, saveReview } from './channels.js';
 import { ApiError } from './http.js';
 import { adminCard, adminKeyboard, copy } from './messages.js';
 import { formatEtb, formatUsdt, parseRate, parseUsdt } from './money.js';
@@ -32,10 +32,9 @@ export async function notifyUser(env, tg, userId, kind, order, ref) {
     const c = copy(user?.language);
     const text = kind === 'reference' ? c.reference(order, ref) : c[kind](order, ref);
     const rows = [[{ text: c.open_order, web_app: { url: orderUrl(env, order.id) } }]];
-    if (kind === 'completed' && !order.feedback) {
-      rows.unshift([{ text: '👍 Good', callback_data: `c:fb:${order.id}:g`, style: 'success' }, { text: '👎 Bad', callback_data: `c:fb:${order.id}:b`, style: 'danger' }]);
-    }
-    await tg.sendMessage(userId, esc(text) + (kind === 'completed' ? `\n\n${c.rate_prompt}` : ''), { reply_markup: { inline_keyboard: rows } });
+    const canRate = kind === 'completed' && !order.rating && !(await getRole(env, userId));
+    if (canRate) rows.unshift([1, 2, 3, 4, 5].map((n) => ({ text: `${n}⭐`, callback_data: `c:rv:${order.id}:${n}` })));
+    await tg.sendMessage(userId, esc(text) + (canRate ? `\n\n${c.rate_prompt}` : ''), { reply_markup: { inline_keyboard: rows } });
   } catch (err) {
     if (err instanceof TelegramError && (err.status === 403 || err.status === 400)) {
       await env.DB.prepare('UPDATE users SET can_dm = 0 WHERE id = ?').bind(userId).run().catch(() => {});
@@ -400,3 +399,36 @@ export async function handleUpdate(env, tg, update) {
 }
 
 
+
+
+// ---------- reviews ----------
+
+/**
+ * A customer rates a finished order from 1 to 5 stars, with an optional short comment.
+ * Only the person who placed the order can do it, only once, and never someone on the team.
+ */
+export async function leaveReview(env, tg, userId, orderId, rating, comment) {
+  if ((await getRole(env, userId))) throw new ApiError(403, 'team_cannot_review', 'Team members cannot review orders.');
+  const row = await getOrderRow(env.DB, orderId);
+  if (!row || row.user_id !== userId) throw new ApiError(404, 'not_found', 'Order not found.');
+  if (row.status !== 'completed') throw new ApiError(409, 'not_completed', 'You can review an order once it is completed.');
+  const r = Number(rating);
+  if (!Number.isInteger(r) || r < 1 || r > 5) throw new ApiError(400, 'invalid_field', 'Choose 1 to 5 stars.', { field: 'rating' });
+  const text = cleanComment(comment);
+  const saved = await saveReview(env.DB, userId, orderId, r, text, nowSec());
+  if (!saved) throw new ApiError(409, 'already_reviewed', 'You already reviewed this order.');
+  const settings = await getSettings(env.DB);
+  const msgId = await postReview(tg, settings, { ...saved, method_label_en: row.method_label_en }, r, text).catch(() => null);
+  if (msgId) await env.DB.prepare('UPDATE orders SET review_msg_id = ? WHERE id = ?').bind(msgId, orderId).run(); // not patchOrder: that would move the order's finish time
+  return { ...row, rating: r, review_text: text || null };
+}
+
+/** A comment sent after the stars. It is added to the same post in the reviews channel. */
+export async function addComment(env, tg, userId, orderId, comment) {
+  const text = cleanComment(comment);
+  if (!text) return null;
+  const row = await addReviewComment(env.DB, userId, orderId, text);
+  if (!row) return null;
+  await editReview(tg, await getSettings(env.DB), row, row.rating, text, row.review_msg_id);
+  return row;
+}

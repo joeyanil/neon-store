@@ -112,6 +112,22 @@ async function main() {
   await page.close();
 
   console.log('\nAdmin works the order in the app');
+  page = await newPage({ user: ADMIN });
+  await step('admin dashboard: counts, last 24 hours, search, the order waiting', async () => {
+    await page.locator('.nav a', { hasText: 'Admin' }).click();
+    await waitText(page, 'Last 24 hours');
+    await waitText(page, 'Buy 20.00 USDT');
+    await page.getByLabel('Search orders').fill(orderId.slice(0, 7));
+    await page.waitForTimeout(900);
+    assert.ok((await body(page)).includes(orderId), 'search finds the order');
+    await page.getByLabel('Search orders').fill('zzzzzz');
+    await page.waitForTimeout(900);
+    assert.ok((await body(page)).includes('No order matches'));
+    await page.getByLabel('Search orders').fill('');
+    await page.waitForTimeout(700);
+    await shot(page, '17b-admin-dashboard');
+  });
+  await page.close();
   page = await newPage({ user: ADMIN, url: `/?a=${orderId}` });
   await step('deep link opens the admin order review', async () => {
     await waitText(page, 'Check in your bank', 10000);
@@ -145,7 +161,7 @@ async function main() {
     await shot(page, '30-settings');
   });
   const pressBack = (pg) => pg.evaluate(() => window.__tg.pressBack());
-  for (const [row, name] of [['Rates, limits and stock', '31-rates'], ['Payment accounts', '32-methods'], ['USDT networks', '33-networks'], ['Services', '34-services'], ['Rules and policies', '35-policies'], ['Team', '36-team'], ['Alerts', '37-alerts'], ['Activity log', '38-audit'], ['Setup guide', '39-setup']]) {
+  for (const [row, name] of [['Rates, limits and stock', '31-rates'], ['Payment accounts', '32-methods'], ['USDT networks', '33-networks'], ['Services', '34-services'], ['Rules and policies', '35-policies'], ['Team', '36-team'], ['Order alerts', '37-alerts'], ['Activity log', '38-audit'], ['Setup guide', '39-setup']]) {
     await step(`open ${row}`, async () => {
       await page.getByText(row, { exact: true }).first().click();
       await page.waitForTimeout(800);

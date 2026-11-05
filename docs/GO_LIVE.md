@@ -10,6 +10,13 @@
 - Mini App: opens even when Telegram storage never answers; shows an error and retry instead of a blank screen; no sideways scroll at 320 px; hostile names are shown as text.
 - Speed: typical requests 10-30 ms locally; first load is 20 script files, about 250 KB before compression.
 
+## Reviews, logs and history (how they work)
+- **Reviews:** only the customer who placed a completed order can rate it, once, 1 to 5 stars with an optional comment. Owners and support staff are refused. The review is posted to the reviews channel with the customer ID hidden (`535***25`). A comment typed in the bot afterwards is added to the same post.
+- **Bot logs:** "New order, waiting for payment" when an order is placed and "Order completed" when it finishes. Rejected, cancelled and expired orders are not posted publicly.
+- **History:** every order keeps its full timeline. The customer and the team see the receipts, transaction numbers, payment details and any review. Receipt images are removed after the retention period (default 90 days, set in Rates, limits and stock). The order, its history and the transaction numbers stay for good. Telegram only lets a bot delete messages younger than 48 hours, so the image stays in the private vault chat but is no longer reachable from the app.
+- **Search:** the admin dashboard searches by order number, @username, customer ID or transaction number.
+- **Roles:** owners have full control. Support staff handle orders and tickets only. Blocking customers and every setting are owner-only.
+
 ## The owner must decide (the app cannot guess these)
 1. Real prices for every service, real minimum and maximum quantities, and which services to keep.
 2. Real payment accounts (Telebirr, CBE, ...) and real USDT deposit addresses. TRC20 currently has no deposit address, so customers cannot sell over TRC20 until one is entered.

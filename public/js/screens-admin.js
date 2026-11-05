@@ -4,9 +4,10 @@ import { S, langPill, topBar } from './components.js';
 import { countBubble, flowTop, listRow, textArea, textField } from './form.js';
 import { errorText, formatAgo, formatWhen, t } from './i18n.js';
 import { confirmDialog, haptic, openTelegramLink, setActions } from './tg.js';
+import { proofsSection } from './proofs-view.js';
 import { copyButton, copyText, etb, h, icon, shrinkImage, skeletons, statusBadge, toast, usdt } from './ui.js';
 
-const FILTERS = [['review', 'To review'], ['release', 'To release'], ['open', 'All open'], ['done', 'Done']];
+const FILTERS = [['review', 'To review'], ['release', 'To release'], ['open', 'Open'], ['done', 'History'], ['all', 'Everything']];
 const REASONS = [['not_received', 'Payment not received'], ['amount_mismatch', 'Amount does not match'], ['unreadable', 'Proof unreadable'], ['other', 'Other reason']];
 const plainEtb = (c) => (c / 100).toFixed(2);
 const plainUsdt = (m) => (m / 1e6).toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
@@ -14,61 +15,95 @@ const who = (c) => c.first_name || (c.username ? `@${c.username}` : String(c.id)
 const sideDot = (side) => h('span', { class: `side-dot ${side === 'service' ? 'svc' : side}`, 'aria-hidden': 'true' }, icon(side === 'service' ? 'bag' : side === 'buy' ? 'arrowdown' : 'arrowup', 20));
 const sideWord = (o) => (o.side === 'service' ? `Service × ${Number(o.quantity).toLocaleString('en-US')}` : `${o.side === 'buy' ? 'Buy' : 'Sell'} ${usdt(o.usdt_micro)} USDT`);
 
-// ---------- queue ----------
+// ---------- dashboard and order list ----------
+const EMPTY = {
+  review: 'Nothing waiting for review. New payments show up here.',
+  release: 'Nothing waiting to be released.',
+  open: 'No open orders right now.',
+  done: 'No finished orders yet.',
+  all: 'No orders yet.',
+};
+
 export function adminHomeScreen(ctx) {
   let filter = ctx.params.filter || 'review';
+  let query = '';
   let dead = false;
   let items = [];
   let next = null;
-  const summaryBox = h('div', { class: 'tile-grid' });
+  let counts = null;
+  const isOwner = S.boot.role === 'owner';
+  const tileBox = h('div', { class: 'tile-grid three' });
+  const statsBox = h('div', { class: 'clay stack' });
   const tabs = h('div', { class: 'tabs-scroll', role: 'group', 'aria-label': 'Filter' });
   const list = h('div', { class: 'stack' });
   const links = h('div', { class: 'stack' });
   const banner = h('div', { class: 'stack' });
+  const search = h('input', { type: 'search', placeholder: 'Search orders', autocomplete: 'off', autocapitalize: 'off', spellcheck: false, 'aria-label': 'Search orders', maxLength: 60 });
+  const searchBox = h('div', { class: 'stack tight-stack' }, h('label', { class: 'well search-box' }, icon('search', 20), search), h('p', { class: 'tiny' }, 'Find by order number, @username, customer ID or transaction number.'));
+  let timer = null;
+  search.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { query = search.value.trim(); load(true); }, 350);
+  });
 
-  const paintTabs = (counts) => tabs.replaceChildren(...FILTERS.map(([f, label]) => h('button', {
-    class: 'chip', type: 'button', 'aria-pressed': String(filter === f), 'data-f': f,
-    onclick: () => { if (filter !== f) { haptic.select(); filter = f; paintTabs(counts); load(true); } },
+  const paintTabs = () => tabs.replaceChildren(...FILTERS.map(([f, label]) => h('button', {
+    class: 'chip', type: 'button', 'aria-pressed': String(filter === f && !query), 'data-f': f,
+    onclick: () => { if (filter !== f || query) { haptic.select(); filter = f; query = ''; search.value = ''; paintTabs(); load(true); } },
   }, label, counts && counts[f] ? ` · ${counts[f]}` : '')));
-  paintTabs(null);
+  paintTabs();
+
+  const tile = (cls, ic, label, n, onClick) => h('button', { class: `stat-tile ${cls}`, type: 'button', onclick: onClick },
+    h('span', { class: 'stat-ic' }, icon(ic, 18)), h('div', { class: 'num' }, String(n)), h('div', { class: 'tiny' }, label));
+  const pick = (f) => { haptic.select(); filter = f; query = ''; search.value = ''; paintTabs(); load(true); };
 
   async function loadSummary() {
     try {
-      const s = await admin.summary();
+      const sm = await admin.summary();
       if (dead) return;
-      S.adminBadge = s.counts.review + s.counts.release + s.counts.tickets;
+      S.adminBadge = sm.counts.review + sm.counts.release + sm.counts.tickets;
       ctx.updateNav();
-      paintTabs({ review: s.counts.review, release: s.counts.release, open: s.counts.review + s.counts.release + s.counts.waiting });
-      summaryBox.replaceChildren(
-        h('div', { class: 'tile' }, h('div', { class: 'tiny' }, 'Needs review'), h('div', { class: 'num big-amount' }, String(s.counts.review))),
-        h('div', { class: 'tile' }, h('div', { class: 'tiny' }, 'To release'), h('div', { class: 'num big-amount' }, String(s.counts.release))));
+      counts = { review: sm.counts.review, release: sm.counts.release, open: sm.counts.review + sm.counts.release + sm.counts.waiting };
+      paintTabs();
+      tileBox.replaceChildren(
+        tile('blue', 'orders', 'To review', sm.counts.review, () => pick('review')),
+        tile('amber', 'send', 'To release', sm.counts.release, () => pick('release')),
+        tile('violet', 'ticket', 'Tickets', sm.counts.tickets, () => ctx.go('/admin/tickets')));
+      const r = sm.reviews;
+      statsBox.replaceChildren(
+        h('h2', { class: 'section-title' }, 'Last 24 hours'),
+        h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'Orders completed'), h('span', { class: 'num' }, String(sm.last_24h.completed))),
+        h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'USDT traded'), h('span', { class: 'num' }, usdt(sm.last_24h.usdt_micro))),
+        h('div', { class: 'stat-line' }, h('span', { class: 'muted' }, 'Customer rating'),
+          r.count ? h('span', { class: 'rating-chip' }, icon('star', 16), `${r.average} · ${r.count} review${r.count === 1 ? '' : 's'}`) : h('span', { class: 'tiny' }, 'No reviews yet')),
+        ...(sm.paused ? [h('div', { class: 'notice warn' }, icon('alert', 20), 'The shop is paused. Customers cannot start new orders.')] : []));
       links.replaceChildren(...[
-        listRow({ title: 'Support tickets', sub: s.counts.tickets ? `${s.counts.tickets} waiting for a reply` : 'All answered', badge: countBubble(s.counts.tickets), lead: h('span', { class: 'side-dot svc' }, icon('ticket', 20)), onClick: () => ctx.go('/admin/tickets') }),
-        s.role === 'owner' ? listRow({ title: 'Shop settings', sub: s.paused ? 'Shop is paused' : 'Accounts, rates, services, rules, team', lead: h('span', { class: 'side-dot svc' }, icon('settings', 20)), onClick: () => ctx.go('/admin/settings') }) : null].filter(Boolean));
-      if (s.role === 'owner') {
+        isOwner ? listRow({ title: 'Shop settings', sub: sm.paused ? 'Shop is paused' : 'Rates, accounts, services, channels, team', lead: h('span', { class: 'side-dot tone-blue' }, icon('settings', 20)), onClick: () => ctx.go('/admin/settings') }) : null,
+        listRow({ title: 'Support tickets', sub: sm.counts.tickets ? `${sm.counts.tickets} waiting for a reply` : 'All answered', badge: countBubble(sm.counts.tickets), lead: h('span', { class: 'side-dot tone-violet' }, icon('ticket', 20)), onClick: () => ctx.go('/admin/tickets') })].filter(Boolean));
+      if (isOwner) {
         const setup = await admin.setup();
         if (dead) return;
         banner.replaceChildren(...(setup.complete ? [] : [h('button', { class: 'clay tight list-row', type: 'button', onclick: () => ctx.go('/admin/setup') },
-          h('span', { class: 'side-dot svc' }, icon('alert', 20)), h('div', { class: 'grow' }, h('div', { class: 'strong' }, 'Finish setting up the shop'), h('div', { class: 'tiny' }, 'A few steps are still missing')), icon('chevron', 20))]));
+          h('span', { class: 'side-dot tone-amber' }, icon('alert', 20)), h('div', { class: 'grow' }, h('div', { class: 'strong' }, 'Finish setting up the shop'), h('div', { class: 'tiny' }, 'A few steps are still missing')), icon('chevron', 20))]));
       }
     } catch { /* the list below shows the error */ }
   }
 
   function paint() {
     list.replaceChildren();
-    if (!items.length) { list.append(h('div', { class: 'clay' }, h('p', { class: 'muted' }, filter === 'review' ? 'Nothing waiting for review.' : filter === 'release' ? 'Nothing waiting to be released.' : 'Nothing here.'))); return; }
+    if (!items.length) { list.append(h('div', { class: 'clay' }, h('p', { class: 'muted' }, query ? `No order matches “${query}”.` : EMPTY[filter]))); return; }
     for (const o of items) {
       list.append(h('button', { class: 'clay tight order-card', type: 'button', onclick: () => ctx.go(`/admin/order/${o.id}`) },
         h('div', { class: 'row' }, sideDot(o.side),
           h('div', { class: 'grow' }, h('div', { class: 'num strong' }, sideWord(o)), h('div', { class: 'tiny ellipsis' }, `${o.id} · ${who(o.customer)} · ${formatAgo(o.updated_at, serverNow())}`)), icon('chevron', 20)),
-        h('div', { class: 'row between' }, h('span', { class: 'row' }, statusBadge(o.status), o.late ? h('span', { class: 'pill warn' }, 'Late') : null), h('div', { class: 'num small strong' }, `${etb(o.etb_cents)} ETB`))));
+        h('div', { class: 'row between' }, h('span', { class: 'row' }, statusBadge(o.status), o.late ? h('span', { class: 'pill warn' }, 'Late') : null,
+          o.rating ? h('span', { class: 'rating-chip' }, icon('star', 14), String(o.rating)) : null), h('div', { class: 'num small strong' }, `${etb(o.etb_cents)} ETB`))));
     }
     if (next) list.append(h('button', { class: 'btn', type: 'button', onclick: () => load(false) }, t('load_more')));
   }
   async function load(reset) {
     if (reset) { items = []; next = null; list.replaceChildren(...skeletons(96, 96)); }
     try {
-      const res = await admin.orders(filter, reset ? null : next);
+      const res = await admin.orders(query ? 'all' : filter, reset ? null : next, query);
       if (dead) return;
       items = reset ? res.orders : items.concat(res.orders);
       next = res.next;
@@ -77,10 +112,13 @@ export function adminHomeScreen(ctx) {
       if (!dead) list.replaceChildren(h('div', { class: 'notice warn' }, icon('alert', 20), errorText(err)));
     }
   }
-  const root = h('div', { class: 'screen' }, topBar({ title: 'Admin', sub: S.boot.role === 'owner' ? 'Owner' : 'Staff', right: langPill(ctx.toggleLang) }), banner, summaryBox, tabs, list, links);
+  const root = h('div', { class: 'screen' },
+    topBar({ title: 'Dashboard', sub: isOwner ? 'Owner · full access' : 'Support · orders and tickets', right: langPill(ctx.toggleLang) }),
+    banner, tileBox, statsBox,
+    h('h2', { class: 'section-title' }, 'Orders'), searchBox, tabs, list, links);
   loadSummary(); load(true);
-  const poll = setInterval(() => { if (!document.hidden) { loadSummary(); load(true); } }, 20000);
-  return { el: root, refresh: () => { loadSummary(); load(true); }, destroy() { dead = true; clearInterval(poll); } };
+  const poll = setInterval(() => { if (!document.hidden && !query) { loadSummary(); load(true); } }, 20000);
+  return { el: root, refresh: () => { loadSummary(); load(true); }, destroy() { dead = true; clearTimeout(timer); clearInterval(poll); } };
 }
 
 // ---------- order review ----------
@@ -131,35 +169,10 @@ export function adminOrderScreen(ctx) {
       h('div', { class: 'tiny' }, `${c.completed_orders} completed of ${c.total_orders} orders · member since ${formatWhen(c.member_since)}`),
       h('div', { class: 'row' },
         c.username ? h('button', { class: 'btn small grow', type: 'button', onclick: () => openTelegramLink(`https://t.me/${c.username}`) }, icon('send', 18), 'Message') : null,
-        h('button', { class: `btn small grow ${c.blocked ? '' : 'danger'}`, type: 'button', onclick: () => toggleBlock(c) }, c.blocked ? 'Unblock' : 'Block customer')));
+        S.boot.role === 'owner' ? h('button', { class: `btn small grow ${c.blocked ? '' : 'danger'}`, type: 'button', onclick: () => toggleBlock(c) }, c.blocked ? 'Unblock' : 'Block customer') : null));
   }
 
-  function proofsCard(o) {
-    const items = o.proofs || [];
-    if (!items.length) return null;
-    const grid = h('div', { class: 'proofs' });
-    const texts = [];
-    for (const p of items) {
-      if (p.text) texts.push(p.text);
-      if (p.has_image) {
-        const cell = h('button', { type: 'button', 'aria-label': 'Open proof' }, '…');
-        grid.append(cell);
-        fetchImage(`/api/orders/${id}/proofs/${p.id}`).then((u) => {
-          urls.push(u);
-          cell.replaceChildren(h('img', { src: u, alt: 'Proof' }));
-          cell.onclick = () => lightbox(u);
-        }).catch(() => { cell.textContent = 'Unavailable'; });
-      } else if (p.removed) grid.append(h('button', { type: 'button', disabled: true }, 'Deleted after retention'));
-    }
-    return h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, `Customer proof (${items.length})`),
-      grid.children.length ? grid : null,
-      ...texts.map((x) => h('div', { class: 'well copy-row' }, h('div', { class: 'grow' }, h('div', { class: 'k' }, 'Transaction no.'), h('div', { class: 'v' }, x)), copyButton(x, 'Transaction no.'))));
-  }
-
-  function lightbox(src) {
-    const box = h('div', { class: 'lightbox', role: 'dialog', onclick: () => box.remove() }, h('img', { src, alt: 'Proof' }), h('button', { class: 'btn primary lightbox-close', type: 'button', onclick: () => box.remove() }, 'Close'));
-    document.body.append(box);
-  }
+  const proofsCard = (o) => proofsSection(id, o.proofs, { retentionDays: S.boot.proof_retention_days, urls });
 
   function warningsCard(d) {
     const notes = [];
@@ -197,6 +210,13 @@ export function adminOrderScreen(ctx) {
     return null;
   }
 
+  function reviewCard(o) {
+    if (!o.rating) return o.status === 'completed' ? h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, 'Customer review'), h('p', { class: 'tiny' }, 'The customer has not reviewed this order yet.')) : null;
+    return h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, 'Customer review'),
+      h('div', { class: 'stars done', 'aria-label': `${o.rating} out of 5 stars` }, [1, 2, 3, 4, 5].map((n) => h('span', { class: n <= o.rating ? 'on' : '' }, icon('star', 24)))),
+      o.review_text ? h('p', { class: 'review-quote' }, o.review_text) : null);
+  }
+
   function timeline(o) {
     return h('section', { class: 'clay stack' }, h('h2', { class: 'section-title' }, t('history')),
       h('ol', { class: 'timeline' }, o.events.map((e) => {
@@ -217,7 +237,7 @@ export function adminOrderScreen(ctx) {
         o.side === 'service' ? null : h('div', { class: 'tiny' }, `Rate ${etb(o.rate_cents)} ETB / USDT, locked at creation`),
         o.reject_reason ? h('div', { class: 'notice warn' }, icon('alert', 20), `Rejected: ${REASONS.find(([k]) => k === o.reject_reason)?.[1] || o.reject_reason}`) : null,
         o.completion_ref ? copyRow('Reference sent', o.completion_ref) : null),
-      ...[warningsCard(detail), customerCard(detail), checkCard(o), proofsCard(o), releaseCard(o), actionsCard(o), timeline(o)].filter(Boolean));
+      ...[warningsCard(detail), customerCard(detail), checkCard(o), proofsCard(o), releaseCard(o), actionsCard(o), reviewCard(o), timeline(o)].filter(Boolean));
     syncActions();
   }
 

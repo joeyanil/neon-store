@@ -1,12 +1,12 @@
 // Chat mode of the bot: everything the Mini App does, as guided conversations inside Telegram.
 // One message is edited as the person moves along; typed answers are removed to keep the chat tidy.
-import { links, postFeedback, postLog, saveFeedback } from './channels.js';
+import { links, postLog } from './channels.js';
 import { createOrder } from './create.js';
 import { ApiError } from './http.js';
 import { etbForUsdt, parseUsdt } from './money.js';
 import { cleanAccount, cleanAddress, cleanName, cleanNote, cleanTarget, isOrderId } from './validate.js';
 import { OPEN_STATUSES, customerStats, getCatalog, getOrderRow, getSettings, listOrders, nowSec, orderView, sideAvailability, stockInfo, unlockProgress } from './orders.js';
-import { cancelOrder, submitEvidence } from './service.js';
+import { addComment, cancelOrder, leaveReview, submitEvidence } from './service.js';
 import { listPolicies } from './shop-admin.js';
 import { createTicket, customerReply, getTicket, isTicketId, listTickets, threadOf } from './tickets.js';
 import { BTN_ADMIN, handleAdminCallback, handleAdminInput } from './chat-admin.js';
@@ -502,12 +502,17 @@ export async function handleChatCallback(env, tg, cb) {
         }
         break;
       }
-      case 'fb': {
-        const saved = isOrderId(a) ? await saveFeedback(ctx.db, ctx.user.id, a, b === 'g', nowSec()) : null;
-        if (saved) await postFeedback(tg, (await shop(ctx)).settings, saved, b === 'g').catch(() => {});
-        await tg.answerCallbackQuery(cb.id, saved ? 'Thanks for the feedback.' : 'Feedback was already sent.').catch(() => {});
-        await tg.editMessageReplyMarkup(chatId, cb.message?.message_id, { inline_keyboard: [[{ text: ctx.s.btn.home, callback_data: 'c:home', style: 'primary' }]] }).catch(() => {});
-        return true;
+      case 'rv': {
+        try {
+          await leaveReview(env, tg, ctx.user.id, a, Number(b), '');
+        } catch (err) {
+          if (!(err instanceof ApiError)) throw err;
+          await tg.answerCallbackQuery(cb.id, ctx.s.reviewNo(err.code), true).catch(() => {});
+          return true;
+        }
+        ctx.session = { flow: 'review', step: 'comment', data: { id: a } };
+        await show(ctx, ctx.s.reviewThanks(Number(b)), [[btn(ctx.s.btn.skip, 'c:home', W)]]);
+        break;
       }
       case 'sup': await showSupport(ctx); break;
       case 'tc': if (a in ctx.s.cats) await startTicket(ctx, a); else await showSupport(ctx); break;
@@ -556,6 +561,13 @@ export async function handleChatInput(env, tg, msg) {
   }
   if (sess.flow === 'proof') return (await handleProofInput(ctx, msg), true);
   if (sess.flow === 'ticket' && sess.step === 'write') return (await handleTicketInput(ctx, msg), true);
+  if (sess.flow === 'review' && sess.step === 'comment') {
+    if (!text) return true;
+    tidy(ctx, msg.message_id);
+    await addComment(ctx.env, ctx.tg, ctx.user.id, sess.data.id, text);
+    await showMenu(ctx, ctx.s.reviewDone);
+    return true;
+  }
   if (sess.flow === 'tkreply') return (await handleTicketReplyInput(ctx, msg), true);
   return false;
 }

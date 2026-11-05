@@ -64,7 +64,7 @@ export function toggleRow({ label, hint = '', value = false, onChange }) {
 export function listRow({ title, sub, badge, onClick, lead }) {
   return h('button', { class: 'clay tight list-row', type: 'button', onclick: onClick },
     lead || null,
-    h('div', { class: 'grow' }, h('div', { class: 'strong ellipsis' }, title), sub ? h('div', { class: 'tiny ellipsis' }, sub) : null),
+    h('div', { class: 'grow' }, h('div', { class: 'strong' }, title), sub ? h('div', { class: 'tiny' }, sub) : null),
     badge || null,
     icon('chevron', 20));
 }

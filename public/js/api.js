@@ -56,7 +56,7 @@ export const api = {
   listOrders: (filter = 'all', before = null) =>
     request('GET', `/api/orders?filter=${filter}${before ? `&before=${before}` : ''}`),
   getOrder: (id) => request('GET', `/api/orders/${id}`),
-  sendFeedback: (id, verdict) => request('POST', `/api/orders/${id}/feedback`, { json: { verdict } }),
+  sendReview: (id, rating, comment) => request('POST', `/api/orders/${id}/review`, { json: { rating, comment } }),
   cancelOrder: (id) => request('POST', `/api/orders/${id}/cancel`, { json: {} }),
   sendEvidence: (id, form) => request('POST', `/api/orders/${id}/evidence`, { form, timeout: 60_000 }),
   policies: () => request('GET', '/api/policies'),
@@ -76,7 +76,7 @@ export async function fetchImage(path) {
 /** Everything under /api/admin. Owners can use all of it; staff only the queue, tickets and customers. */
 export const admin = {
   summary: () => request('GET', '/api/admin/summary'),
-  orders: (filter, before = null) => request('GET', `/api/admin/orders?filter=${filter}${before ? `&before=${before}` : ''}`),
+  orders: (filter, before = null, q = '') => request('GET', `/api/admin/orders?filter=${filter}${before ? `&before=${before}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
   order: (id) => request('GET', `/api/admin/orders/${id}`),
   act: (id, action, json = {}) => request('POST', `/api/admin/orders/${id}/${action}`, { json }),
   block: (userId, blocked) => request('POST', `/api/admin/customers/${userId}/block`, { json: { blocked } }),

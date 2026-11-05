@@ -31,25 +31,31 @@ function loading(root, load) {
 }
 
 // ---------- hub ----------
+const tone = (name, cls) => h('span', { class: `side-dot ${cls}`, 'aria-hidden': 'true' }, icon(name, 20));
+
 export function settingsHubScreen(ctx) {
   const root = h('div', { class: 'screen' }, flowTop(ctx, 'Shop settings'));
   loading(root, async () => {
     const [setup, methods, networks, services, policies] = await Promise.all([admin.setup(), admin.list('methods'), admin.list('networks'), admin.list('services'), admin.list('policies')]);
-    const row = (name, ttl, sub, path, badge) => listRow({ title: ttl, sub, lead: lead(name), badge, onClick: () => ctx.go(path) });
-    const rows = [
-      setup.complete ? null : listRow({ title: 'Setup guide', sub: 'A few steps are still missing', lead: lead('alert'), badge: h('span', { class: 'pill warn' }, 'Finish'), onClick: () => ctx.go('/admin/setup') }),
-      row('rates', 'Rates, limits and stock', 'Prices, order sizes, USDT you hold, pause', '/admin/rates'),
-      row('orders', 'Payment accounts', `${methods.methods.length} added · where customers pay you, and how you pay them`, '/admin/methods'),
-      row('globe', 'USDT networks', `${networks.networks.length} added · deposit addresses and sending options`, '/admin/networks'),
-      row('bag', 'Services', `${services.services.length} on the price list`, '/admin/services'),
-      row('send', 'Channels', 'Channel, reviews and logs links on the bot', '/admin/channels'),
-      row('book', 'Rules and policies', `${policies.sections.length} sections customers can read`, '/admin/policies'),
-      row('shield', 'Team', 'Owners and staff', '/admin/team'),
-      row('support', 'Alerts', setup.alerts.tested ? (setup.alerts.mode === 'dm' ? 'Private messages to each admin' : 'Sent to a group chat') : 'Not tested yet', '/admin/alerts'),
-      S.boot.role === 'owner' ? row('globe', 'Button emoji', 'Premium emoji on the chat bot buttons', '/admin/emoji') : null,
-      row('clock', 'Activity log', 'Who changed what', '/admin/audit'),
-    ];
-    return h('div', { class: 'stack' }, ...rows);
+    const row = (name, cls, ttl, sub, path, badge) => listRow({ title: ttl, sub, lead: tone(name, cls), badge, onClick: () => ctx.go(path) });
+    const group = (ttl, hint, ...rows) => h('section', { class: 'stack' }, h('div', null, h('h2', { class: 'section-title' }, ttl), h('p', { class: 'tiny' }, hint)), ...rows.filter(Boolean));
+    const alertSub = setup.alerts.tested ? (setup.alerts.mode === 'dm' ? 'Sent to each admin privately' : 'Sent to a group chat') : 'Not tested yet';
+    return h('div', { class: 'stack' },
+      setup.complete ? null : listRow({ title: 'Setup guide', sub: 'A few steps are still missing', lead: tone('alert', 'tone-amber'), badge: h('span', { class: 'pill warn' }, 'Open'), onClick: () => ctx.go('/admin/setup') }),
+      group('Money', 'The prices and accounts every order depends on.',
+        row('rates', 'tone-green', 'Rates, limits and stock', 'What you charge, order sizes, the USDT you hold, pause the shop', '/admin/rates'),
+        row('orders', 'tone-green', 'Payment accounts', `${methods.methods.length} added. Where customers pay you, and how you pay them`, '/admin/methods'),
+        row('globe', 'tone-green', 'USDT networks', `${networks.networks.length} added. Where customers send USDT`, '/admin/networks')),
+      group('What you sell', 'The social media services customers can order.',
+        row('bag', 'tone-violet', 'Services', `${services.services.length} on the price list`, '/admin/services')),
+      group('Talking to customers', 'What customers read and where your team gets notified.',
+        row('megaphone', 'tone-blue', 'Channels', 'Main channel, reviews and order logs', '/admin/channels'),
+        row('book', 'tone-blue', 'Rules and policies', `${policies.sections.length} sections customers can read`, '/admin/policies'),
+        row('support', 'tone-teal', 'Order alerts', alertSub, '/admin/alerts')),
+      group('Team and records', 'Who can do what, and a history of changes.',
+        row('shield', 'tone-amber', 'Team', 'Owners have full control. Support staff handle orders and tickets', '/admin/team'),
+        row('clock', 'tone-amber', 'Activity log', 'Who changed what, and when', '/admin/audit'),
+        S.boot.role === 'owner' ? row('star', 'tone-amber', 'Bot button emoji', 'Premium emoji on the chat bot buttons', '/admin/emoji') : null));
   });
   return { el: root };
 }
@@ -66,8 +72,8 @@ export function ratesSettingsScreen(ctx) {
       min_usdt: textField({ label: 'Smallest order', value: toUsdt(s.min_usdt_micro), inputMode: 'decimal', suffix: 'USDT', placeholder: '5' }),
       max_usdt: textField({ label: 'Largest order', value: toUsdt(s.max_usdt_micro), inputMode: 'decimal', suffix: 'USDT', placeholder: 'You decide', hint: 'The shop stays closed for USDT orders until you set this.' }),
       stock_usdt: textField({ label: 'USDT you hold right now', value: toUsdt(s.stock_usdt_micro), inputMode: 'decimal', suffix: 'USDT', placeholder: 'Leave empty to not track', hint: 'Goes down by itself when a buy is completed. You can type a new number any time.' }),
-      order_ttl_min: textField({ label: 'Time to pay', value: String(s.order_ttl_min), inputMode: 'numeric', suffix: 'min' }),
-      max_open_orders: textField({ label: 'Open orders per customer', value: String(s.max_open_orders), inputMode: 'numeric' }),
+      order_ttl_min: textField({ label: 'Time customers have to pay', value: String(s.order_ttl_min), inputMode: 'numeric', suffix: 'min', hint: 'After this the order expires. A receipt sent late is still shown to you for 24 hours.' }),
+      max_open_orders: textField({ label: 'Open orders per customer', value: String(s.max_open_orders), inputMode: 'numeric', hint: 'Stops one person from filling your queue.' }),
       proof_retention_days: textField({ label: 'Keep proof images for', value: String(s.proof_retention_days), inputMode: 'numeric', suffix: 'days', hint: '0 keeps them forever. Orders stay; only the images are deleted.' }),
     };
     const stockShow = toggleRow({ label: 'Show stock to customers', hint: 'When off, customers never see the amount, not even in an error message.', value: s.stock_show });
@@ -84,10 +90,10 @@ export function ratesSettingsScreen(ctx) {
       if (res) { toast('Saved', 'ok'); S.boot = { ...(await api.bootstrap().catch(() => S.boot)), user: S.boot.user }; }
     };
     return h('div', { class: 'stack' },
-      card(title('Rates'), f.buy_rate.el, f.sell_rate.el, h('p', { class: 'tiny' }, 'No fees are added. Whatever your exchange takes comes out of your own margin.')),
-      card(title('Order size'), f.min_usdt.el, f.max_usdt.el),
-      card(title('Stock'), f.stock_usdt.el, stockShow.el, addOnSell.el),
-      card(title('Timing and limits'), f.order_ttl_min.el, f.max_open_orders.el, f.proof_retention_days.el),
+      card(title('Rates'), h('p', { class: 'tiny' }, 'The two prices customers see on the home screen.'), f.buy_rate.el, f.sell_rate.el, h('p', { class: 'tiny' }, 'No fees are added. Whatever your exchange takes comes out of your own margin.')),
+      card(title('Order size'), h('p', { class: 'tiny' }, 'The smallest and largest USDT amount in one order.'), f.min_usdt.el, f.max_usdt.el),
+      card(title('Stock'), h('p', { class: 'tiny' }, 'Optional. Stops you from selling USDT you do not have.'), f.stock_usdt.el, stockShow.el, addOnSell.el),
+      card(title('Timing and limits'), h('p', { class: 'tiny' }, 'How long orders wait, and how long receipt images are kept.'), f.order_ttl_min.el, f.max_open_orders.el, f.proof_retention_days.el),
       card(paused.el));
   });
   setActions({ text: 'Save', onClick: () => save?.() });
@@ -132,7 +138,6 @@ export function methodFormScreen(ctx) {
     const f = {
       kind: segField({ label: 'Type', value: m.kind, options: [['mobile', 'Mobile money'], ['bank', 'Bank']] }),
       label_en: textField({ label: 'Name customers see', value: m.label_en, placeholder: 'Telebirr', maxLength: 40 }),
-      label_am: textField({ label: 'Name in Amharic (optional)', value: m.label_am, placeholder: 'ቴሌብር', maxLength: 40 }),
       account_name: textField({ label: 'Account holder name', value: m.account_name, placeholder: 'Exactly as the bank or Telebirr shows it', hint: 'Customers see this to be sure they pay the right person.' }),
       account_number: textField({ label: 'Account or phone number', value: m.account_number, inputMode: 'text', placeholder: '0911 22 33 44 or 1000123456789' }),
       note: textField({ label: 'Note to the customer (optional)', value: m.note, maxLength: 160, placeholder: 'Write the order number in the reason field' }),
@@ -143,10 +148,10 @@ export function methodFormScreen(ctx) {
     const paySell = toggleRow({ label: 'I can pay customers here', hint: 'Used when a customer sells USDT and you send them birr.', value: m.pay_sell });
     const ratio = toggleRow({ label: 'Need more completed than cancelled', value: m.unlock_need_ratio });
     const active = toggleRow({ label: 'Active', hint: 'Turn off to hide it without deleting.', value: m.active });
-    const presets = isNew ? card(title('Quick start'), h('div', { class: 'preset-row' }, METHOD_PRESETS.map(([name, kind, am]) => h('button', { class: 'chip', type: 'button', onclick: () => { f.label_en.set(name); f.label_am.set(am); f.kind.set(kind); } }, name)))) : null;
+    const presets = isNew ? card(title('Quick start'), h('div', { class: 'preset-row' }, METHOD_PRESETS.map(([name, kind, am]) => h('button', { class: 'chip', type: 'button', onclick: () => { f.label_en.set(name); f.kind.set(kind); } }, name)))) : null;
     save = async () => {
       const body = {
-        kind: f.kind.get(), label_en: f.label_en.get(), label_am: f.label_am.get(), account_name: f.account_name.get(), account_number: f.account_number.get(), note: f.note.get(),
+        kind: f.kind.get(), label_en: f.label_en.get(), account_name: f.account_name.get(), account_number: f.account_number.get(), note: f.note.get(),
         accept_buy: acceptBuy.get(), pay_sell: paySell.get(), active: active.get(), unlock_orders: f.unlock_orders.get(), unlock_volume: f.unlock_volume.get(), unlock_need_ratio: ratio.get(),
       };
       const res = await submit(f, () => (isNew ? admin.create('methods', body) : admin.update('methods', code, body)));
@@ -240,7 +245,6 @@ export function serviceFormScreen(ctx) {
     const f = {
       platform: segField({ label: 'Platform', value: s.platform, options: Object.entries(PLATFORM_LABEL) }),
       name_en: textField({ label: 'Name customers see', value: s.name_en, maxLength: 60, placeholder: 'Telegram members' }),
-      name_am: textField({ label: 'Name in Amharic (optional)', value: s.name_am, maxLength: 60 }),
       price: textField({ label: 'Price for 1,000', value: toBirr(s.price_cents_per_1000), inputMode: 'decimal', suffix: 'ETB', placeholder: '85' }),
       min_qty: textField({ label: 'Smallest order', value: String(s.min_qty), inputMode: 'numeric' }),
       max_qty: textField({ label: 'Largest order', value: String(s.max_qty), inputMode: 'numeric' }),
@@ -251,7 +255,7 @@ export function serviceFormScreen(ctx) {
     const active = toggleRow({ label: 'Active', hint: 'Turn off to hide it without deleting.', value: s.active });
     const presets = isNew ? card(title('Quick start'), h('div', { class: 'preset-row' }, Object.entries(SERVICE_PRESETS).flatMap(([p, names]) => names.map((n) => h('button', { class: 'chip', type: 'button', onclick: () => { f.platform.set(p); f.name_en.set(n); } }, n))))) : null;
     save = async () => {
-      const body = { platform: f.platform.get(), name_en: f.name_en.get(), name_am: f.name_am.get(), price: f.price.get(), min_qty: f.min_qty.get(), max_qty: f.max_qty.get(), eta_text: f.eta_text.get(), warranty_days: f.warranty_days.get(), note: f.note.get(), active: active.get() };
+      const body = { platform: f.platform.get(), name_en: f.name_en.get(), price: f.price.get(), min_qty: f.min_qty.get(), max_qty: f.max_qty.get(), eta_text: f.eta_text.get(), warranty_days: f.warranty_days.get(), note: f.note.get(), active: active.get() };
       const res = await submit(f, () => (isNew ? admin.create('services', body) : admin.update('services', code, body)));
       if (res) { toast('Saved', 'ok'); ctx.back(); }
     };
@@ -306,7 +310,7 @@ export function policyFormScreen(ctx) {
 // ---------- team ----------
 export function teamScreen(ctx) {
   const root = h('div', { class: 'screen flow' }, flowTop(ctx, 'Team'));
-  const idField = textField({ label: 'Telegram number id', inputMode: 'numeric', placeholder: '123456789', hint: 'They can get it from @userinfobot. They must also have started this bot once.' });
+  const idField = textField({ label: 'Telegram user ID', inputMode: 'numeric', placeholder: '123456789' });
   const nameField = textField({ label: 'Name (optional)', maxLength: 40 });
   const listBox = h('div', { class: 'stack' }, ...skeletons(70));
   const person = (p, owner) => h('div', { class: 'clay tight row' }, h('div', { class: 'grow' }, h('div', { class: 'strong' }, p.first_name || p.name || p.id), h('div', { class: 'tiny' }, `${p.username ? `@${p.username} · ` : ''}ID ${p.id}`)),
@@ -316,7 +320,13 @@ export function teamScreen(ctx) {
     } }, 'Remove'));
   const paint = (d) => listBox.replaceChildren(...d.owners.map((o) => person(o, true)), ...d.staff.map((s) => person(s, false)));
   admin.team().then(paint).catch((err) => listBox.replaceChildren(h('div', { class: 'notice warn' }, errorText(err))));
-  root.append(listBox, card(title('Add staff'), h('p', { class: 'tiny' }, 'Staff can review orders, release money and answer tickets. They cannot change accounts, rates or the team.'), idField.el, nameField.el,
+  const can = (ok, text) => h('div', { class: 'check-item' + (ok ? ' done' : '') }, h('span', { class: 'tick' }, ok ? icon('check', 16) : null), h('span', { class: ok ? '' : 'muted' }, text));
+  root.append(card(title('Who can do what'),
+    h('div', { class: 'stack' }, h('div', { class: 'strong' }, 'Owner'), can(true, 'Everything below, plus shop settings, rates, accounts, services, channels, team and the activity log'),
+      can(true, 'Block and unblock customers')),
+    h('div', { class: 'stack' }, h('div', { class: 'strong' }, 'Support staff'), can(true, 'See the order queue and every order, with receipts and transaction numbers'), can(true, 'Confirm payments, mark orders released, reject orders'),
+      can(true, 'Answer support tickets'), can(false, 'Change rates, accounts, services or settings'), can(false, 'Add team members or block customers'), can(false, 'Leave customer reviews (nobody on the team can)'))),
+    listBox, card(title('Add support staff'), h('p', { class: 'tiny' }, 'Ask the person to open the bot once, then send you their Telegram user ID. They can get it from @userinfobot.'), idField.el, nameField.el,
     h('button', { class: 'btn primary block', type: 'button', onclick: async () => {
       const res = await submit({ id: idField, name: nameField }, () => admin.addStaff({ id: idField.get(), name: nameField.get() }));
       if (res) { paint(res); idField.set(''); nameField.set(''); toast('Added', 'ok'); }
@@ -326,7 +336,7 @@ export function teamScreen(ctx) {
 
 // ---------- alerts ----------
 export function alertsScreen(ctx) {
-  const root = h('div', { class: 'screen flow' }, flowTop(ctx, 'Alerts'));
+  const root = h('div', { class: 'screen flow' }, flowTop(ctx, 'Order alerts'));
   const box = h('div', { class: 'stack' }, ...skeletons(120));
   root.append(box);
   const paint = (info) => box.replaceChildren(
