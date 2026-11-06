@@ -1145,7 +1145,7 @@ async function main() {
     assert.ok(sm.storage.bytes > 0 && sm.storage.limit === 500 * 1024 * 1024, 'the storage meter has a size');
   });
   console.log('\nXO game');
-  await step('XO game: picker with image, starts on first tap, no Play step, second tapper is O, win marks, play again below, open-store button', async () => {
+  await step('XO game: picker with image, starts on first tap, second tapper is O, win marks, instant play again with last result, long names, blue store button', async () => {
     await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq1', from: ALICE, query: '', offset: '' } });
     const iq = lastPayload('answerInlineQuery');
     assert.equal(iq.cache_time, 0);
@@ -1159,12 +1159,12 @@ async function main() {
     const tap = (from, data, id = imid) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data, inline_message_id: id } });
     const shown = (id = imid) => lastPayload('editMessageText', (p) => p.inline_message_id === id);
     await tap(ALICE, 'xo:m:0'); // Alice taps first: she is X and plays that square
-    assert.match(shown().text, /▹ <b>X<\/b> Alice[\s\S]*▸ <b>O<\/b> …/);
+    assert.match(shown().text, /▹ <b>X:<\/b> \u2068Alice\u2069[\s\S]*▸ <b>O:<\/b> …/);
     assert.equal(shown().reply_markup.inline_keyboard[0][0].text, '𝗫');
     await tap(ALICE, 'xo:m:1');
     assert.match(lastPayload('answerCallbackQuery').text, /Waiting for a friend/);
     await tap(BOB, 'xo:m:3'); // Bob taps: he is O
-    assert.match(shown().text, /▸ <b>X<\/b> Alice[\s\S]*▹ <b>O<\/b> Bob/);
+    assert.match(shown().text, /▸ <b>X:<\/b> \u2068Alice\u2069[\s\S]*▹ <b>O:<\/b> \u2068Bob\u2069/);
     await tap(BOB, 'xo:m:4');
     assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
     await tap({ id: 111777, first_name: 'Carl' }, 'xo:m:8');
@@ -1172,26 +1172,31 @@ async function main() {
     await tap(ALICE, 'xo:m:3');
     assert.match(lastPayload('answerCallbackQuery').text, /taken/);
     for (const [u, c] of [[ALICE, 1], [BOB, 4], [ALICE, 2]]) await tap(u, `xo:m:${c}`);
-    assert.match(shown().text, /<b>X<\/b> Alice 🥇[\s\S]*<b>O<\/b> Bob 🙌/);
+    assert.match(shown().text, /<b>X:<\/b> \u2068Alice\u2069 🥇[\s\S]*<b>O:<\/b> \u2068Bob\u2069 🙌/);
     assert.ok(!/wins|draw|Turn|▸|▹/i.test(shown().text), 'no result wording');
+    assert.ok(shown().text.startsWith('<b>XO · Game</b>'), 'the title is fully bold');
+    assert.ok(shown().text.includes('<b>\u2003\u2003\u2003vs</b>'), 'vs is bold');
     const mk = JSON.stringify(shown().reply_markup);
-    assert.ok(mk.includes('again ') && mk.includes('switch_inline_query_current_chat') && mk.includes('Open Store'));
+    assert.ok(mk.includes('xo:r') && !mk.includes('switch_inline_query') && mk.includes('Open Store') && mk.includes('"style":"primary"'));
     assert.ok(!mk.includes('xo:m:'), 'a finished board cannot be played');
     await tap(ALICE, 'xo:n');
     assert.match(lastPayload('answerCallbackQuery').text, /over/);
-    // play again: a fresh message for the same two players, the finished one stays as it was
-    const code = /again (\d+)/.exec(mk)[1];
-    await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq2', from: BOB, query: `again ${code}`, offset: '' } });
-    const offer = lastPayload('answerInlineQuery').results[0];
-    assert.match(offer.input_message_content.message_text, /▸ <b>X<\/b> Bob[\s\S]*▹ <b>O<\/b> Alice/);
-    const cell = offer.reply_markup.inline_keyboard[1][1].callback_data;
-    await tap({ id: 111777, first_name: 'Carl' }, cell, 'inl-2');
+    // play again: the same message restarts at once, the other person starts, the last result stays as a note
+    await tap({ id: 111777, first_name: 'Carl' }, 'xo:r');
     assert.match(lastPayload('answerCallbackQuery').text, /Only the two players/);
-    await tap(ALICE, cell, 'inl-2');
+    await tap(BOB, 'xo:r');
+    assert.match(shown().text, /▸ <b>X:<\/b> \u2068Bob\u2069[\s\S]*▹ <b>O:<\/b> \u2068Alice\u2069/);
+    assert.match(shown().text, /<i>Last game: \u2068Alice\u2069 🥇 · \u2068Bob\u2069 🙌<\/i>/);
+    assert.ok(!JSON.stringify(shown().reply_markup).includes('xo:n'), 'the board is playable again');
+    await tap(ALICE, 'xo:m:4');
     assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
-    await tap(BOB, cell, 'inl-2');
-    assert.match(shown('inl-2').text, /▹ <b>X<\/b> Bob[\s\S]*▸ <b>O<\/b> Alice/);
-    assert.match(shown().text, /Alice 🥇/, 'the first result is still there');
+    await tap(BOB, 'xo:m:4');
+    assert.match(shown().text, /▹ <b>X:<\/b> \u2068Bob\u2069[\s\S]*▸ <b>O:<\/b> \u2068Alice\u2069/);
+    // long names are cut so the board keeps its size
+    const longName = { id: 111888, first_name: 'Bartholomew-Alexander the Third' };
+    await tap(longName, 'xo:m:0', 'inl-4');
+    assert.match(shown('inl-4').text, /Bartholomew…/);
+    assert.ok(!shown('inl-4').text.includes('Alexander'));
     // a draw
     const d = 'inl-3';
     await tap(ALICE, 'xo:m:0', d);

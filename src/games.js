@@ -19,14 +19,18 @@ export function winnerOf(board) {
 
 const openApp = (bot) => (bot ? [{ text: '🛍 Open Store', url: `https://t.me/${bot}?start=xo`, style: 'primary' }] : []);
 
+const FILL = '\u2800'.repeat(14); // invisible padding so the message, and with it the board, keeps the same width for short and long names
+const NAME_MAX = 12;
+const shown = (name) => { const n = String(name); return `\u2068${esc(n.length > NAME_MAX ? `${[...n].slice(0, NAME_MAX - 1).join('')}…` : n)}\u2069`; }; // the isolate marks stop Arabic names from scrambling the order
+
 /** The message text: title, X, "vs", O. ▸ marks whose turn it is; after the game 🥇 / 🙌 (or 🤝 for a draw). */
-function textOf({ xName, oName, turn, winner }) {
+function textOf({ xName, oName, turn, winner, last }) {
   const side = (s, name) => {
-    const who = name == null ? '…' : esc(name);
-    if (winner) return `<b>${s}</b> ${who} ${winner === 'D' ? '🤝' : winner === s ? '🥇' : '🙌'}`;
-    return `${turn === s ? '▸' : '▹'} <b>${s}</b> ${who}`;
+    const who = name == null ? '…' : shown(name);
+    if (winner) return `<b>${s}:</b> ${who} ${winner === 'D' ? '🤝' : winner === s ? '🥇' : '🙌'}`;
+    return `${turn === s ? '▸' : '▹'} <b>${s}:</b> ${who}`;
   };
-  return `<b>XO</b> · Game\n${side('X', xName)}\n${GAP}vs\n${side('O', oName)}`;
+  return `<b>XO · Game</b>${FILL}\n${side('X', xName)}\n<b>${GAP}vs</b>\n${side('O', oName)}${last ? `\n<i>${last}</i>` : ''}`;
 }
 
 function boardRows(board, data) {
@@ -35,28 +39,22 @@ function boardRows(board, data) {
 
 function view(g, bot) {
   const done = g.status === 'done';
-  const text = textOf({ xName: g.x_name, oName: g.o_id ? g.o_name : null, turn: g.turn, winner: done ? g.winner : null });
+  const text = textOf({ xName: g.x_name, oName: g.o_id ? g.o_name : null, turn: g.turn, winner: done ? g.winner : null, last: g.last });
   const kb = boardRows(g.board, (i) => (done ? 'xo:n' : `xo:m:${i}`));
-  if (done) kb.push([{ text: '🔁 Play again', switch_inline_query_current_chat: `again ${g.rid}` }]); // posts a new game below, same two players
+  if (done) kb.push([{ text: '🔁 Play again', callback_data: 'xo:r' }]); // restarts this same message at once, no list
   kb.push(openApp(bot));
   return { text, markup: { inline_keyboard: kb.filter((r) => r.length) } };
 }
 
-/** Someone typed @bot in a chat: offer one game (or, after "Play again", a new game for the same two players). */
+/** Someone typed @bot in a chat: offer one game. */
 export async function handleInlineQuery(env, tg, q) {
   const settings = await getSettings(env.DB);
   const bot = await botUsername(env, tg, settings);
   const base = String(env.WEBAPP_URL || settings.webapp_url || '').replace(/\/$/, '');
-  const again = /^again (\d{1,12})$/.exec(String(q.query || '').trim());
-  const old = again ? await env.DB.prepare("SELECT rowid AS rid, * FROM games WHERE rowid = ? AND status = 'done'").bind(Number(again[1])).first() : null;
-  const ok = old && (q.from.id === old.x_id || q.from.id === old.o_id);
-  // After "Play again" the two players swap sides, so the other person starts.
-  const text = ok ? textOf({ xName: old.o_name, oName: old.x_name, turn: 'X' }) : `<b>XO</b> · Game\nTap any square to start`;
-  const cells = boardRows('.........', (i) => (ok ? `xo:a:${old.rid}:${i}` : `xo:m:${i}`));
   const result = {
-    type: 'article', id: `xo${Date.now().toString(36)}`, title: ok ? 'XO · play again' : 'XO', description: OFFER,
-    input_message_content: { message_text: text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
-    reply_markup: { inline_keyboard: [...cells, openApp(bot)].filter((r) => r.length) },
+    type: 'article', id: `xo${Date.now().toString(36)}`, title: 'XO', description: OFFER,
+    input_message_content: { message_text: `<b>XO · Game</b>${FILL}\nTap any square to start`, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
+    reply_markup: { inline_keyboard: [...boardRows('.........', (i) => `xo:m:${i}`), openApp(bot)].filter((r) => r.length) },
   };
   if (/^https?:\/\//.test(base)) Object.assign(result, { thumbnail_url: `${base}/xo-thumb.jpg`, thumbnail_width: 320, thumbnail_height: 320 });
   await tg.answerInlineQuery(q.id, [result]);
@@ -72,29 +70,33 @@ export async function handleGameCallback(env, tg, cb) {
   const say = (t, alert = false) => tg.answerCallbackQuery(cb.id, t, alert).catch(() => {});
   const bot = await botUsername(env, tg, await getSettings(env.DB));
   const show = async (g) => { const v = view(g, bot); await tg.editInlineMessage(id, v.text, v.markup).catch(() => {}); };
-  const [, act, a1, a2] = String(cb.data || '').split(':');
-  if (act === 'n') return say('This game is over. Tap Play again to start a new one.');
-  if (act !== 'm' && act !== 'a') return say();
-  const cell = Number(act === 'a' ? a2 : a1);
+  const [, act, a1] = String(cb.data || '').split(':');
+  if (act === 'n') return say('This game is over. Tap Play again.');
+  if (act === 'r') { // Play again: same message, same two people, the other one starts; the last result stays as a note
+    const g0 = await getGame(env.DB, id);
+    if (!g0 || g0.status !== 'done') return say();
+    if (me.id !== g0.x_id && me.id !== g0.o_id) return say('Only the two players can play again.', true);
+    const note = g0.winner === 'D' ? 'Last game: draw 🤝' : `Last game: ${shown(g0.winner === 'X' ? g0.x_name : g0.o_name)} 🥇 · ${shown(g0.winner === 'X' ? g0.o_name : g0.x_name)} 🙌`;
+    const r = await env.DB.prepare("UPDATE games SET board = '.........', turn = 'X', status = 'play', winner = NULL, moves = 0, last = ?, x_id = o_id, x_name = o_name, o_id = x_id, o_name = x_name, updated_at = ? WHERE id = ? AND status = 'done'").bind(note, now, id).run();
+    await say();
+    if (!r.meta.changes) return;
+    return show(await getGame(env.DB, id));
+  }
+  if (act !== 'm') return say();
+  const cell = Number(a1);
   if (!Number.isInteger(cell) || cell < 0 || cell > 8) return say();
 
   let g = await getGame(env.DB, id);
   if (!g) {
-    if (act === 'a') { // a "play again" message: the same two people, the other one starts
-      const old = await env.DB.prepare("SELECT * FROM games WHERE rowid = ? AND status = 'done'").bind(Number(a1)).first();
-      if (!old) return say('That game is no longer available. Start a new one.', true);
-      if (me.id !== old.x_id && me.id !== old.o_id) return say('Only the two players can play again.', true);
-      await env.DB.prepare("INSERT OR IGNORE INTO games (id, x_id, x_name, o_id, o_name, status, turn, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'play', 'X', ?, ?)").bind(id, old.o_id, old.o_name, old.x_id, old.x_name, now, now).run();
-    } else { // a brand-new game: whoever taps first is X
-      const recent = await env.DB.prepare('SELECT COUNT(*) n FROM games WHERE created_at > ?').bind(now - 86400).first();
-      if ((recent?.n || 0) >= DAILY_CAP) return say('Games are resting for today. Please try again tomorrow.', true);
-      await env.DB.prepare("INSERT OR IGNORE INTO games (id, x_id, x_name, status, turn, created_at, updated_at) VALUES (?, ?, ?, 'play', 'X', ?, ?)").bind(id, me.id, nameOf(me), now, now).run();
-    }
+    // a brand-new game: whoever taps first is X
+    const recent = await env.DB.prepare('SELECT COUNT(*) n FROM games WHERE created_at > ?').bind(now - 86400).first();
+    if ((recent?.n || 0) >= DAILY_CAP) return say('Games are resting for today. Please try again tomorrow.', true);
+    await env.DB.prepare("INSERT OR IGNORE INTO games (id, x_id, x_name, status, turn, created_at, updated_at) VALUES (?, ?, ?, 'play', 'X', ?, ?)").bind(id, me.id, nameOf(me), now, now).run();
     g = await getGame(env.DB, id);
     if (!g) return say();
   }
 
-  if (g.status === 'done') return say('This game is over. Tap Play again to start a new one.');
+  if (g.status === 'done') return say('This game is over. Tap Play again.');
   if (!g.o_id && me.id !== g.x_id) { // the second person to tap becomes O
     await env.DB.prepare('UPDATE games SET o_id = ?, o_name = ? WHERE id = ? AND o_id IS NULL').bind(me.id, nameOf(me), id).run();
     g = await getGame(env.DB, id);
