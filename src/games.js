@@ -17,7 +17,7 @@ export function winnerOf(board) {
   return board.includes('.') ? null : 'D';
 }
 
-const openApp = (bot) => (bot ? [{ text: '🛍 Open Store', url: `https://t.me/${bot}?start=xo` }] : []);
+const openApp = (bot) => (bot ? [{ text: '🛍 Open Store', url: `https://t.me/${bot}?start=xo`, style: 'primary' }] : []);
 
 /** The message text: title, X, "vs", O. ▸ marks whose turn it is; after the game 🥇 / 🙌 (or 🤝 for a draw). */
 function textOf({ xName, oName, turn, winner }) {
