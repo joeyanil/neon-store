@@ -53,7 +53,7 @@ export async function handleInlineQuery(env, tg, q) {
   const base = String(env.WEBAPP_URL || settings.webapp_url || '').replace(/\/$/, '');
   const result = {
     type: 'article', id: `xo${Date.now().toString(36)}`, title: 'XO', description: OFFER,
-    input_message_content: { message_text: `<b>XO · Game</b>${FILL}\nTap any square to start`, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
+    input_message_content: { message_text: `<b>XO · Game</b>${FILL}`, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
     reply_markup: { inline_keyboard: [...boardRows('.........', (i) => `xo:m:${i}`), openApp(bot)].filter((r) => r.length) },
   };
   if (/^https?:\/\//.test(base)) Object.assign(result, { thumbnail_url: `${base}/xo-thumb.jpg`, thumbnail_width: 320, thumbnail_height: 320 });
@@ -76,7 +76,7 @@ export async function handleGameCallback(env, tg, cb) {
     const g0 = await getGame(env.DB, id);
     if (!g0 || g0.status !== 'done') return say();
     if (me.id !== g0.x_id && me.id !== g0.o_id) return say('Only the two players can play again.', true);
-    const note = g0.winner === 'D' ? 'Last game: draw 🤝' : `Last game: ${shown(g0.winner === 'X' ? g0.x_name : g0.o_name)} 🥇 · ${shown(g0.winner === 'X' ? g0.o_name : g0.x_name)} 🙌`;
+    const note = g0.winner === 'D' ? 'Draw 🤝' : `${shown(g0.winner === 'X' ? g0.x_name : g0.o_name)} 🥇`;
     const r = await env.DB.prepare("UPDATE games SET board = '.........', turn = 'X', status = 'play', winner = NULL, moves = 0, last = ?, x_id = o_id, x_name = o_name, o_id = x_id, o_name = x_name, updated_at = ? WHERE id = ? AND status = 'done'").bind(note, now, id).run();
     await say();
     if (!r.meta.changes) return;

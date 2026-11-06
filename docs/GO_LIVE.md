@@ -43,5 +43,5 @@
 1. In @BotFather send `/setinline`, pick your bot, and set the placeholder to `Play XO`.
 2. Open `/connect` once (or wait for the 5-minute job) so Telegram starts sending inline requests to the bot.
 3. In any chat type `@YourBot` and a space, then tap "XO". The board appears at once. The first person to tap a square plays X, the next different person plays O.
-4. When a game ends, "Play again" restarts the same message at once (the other player starts) and keeps one line with the last result.
+4. When a game ends, "Play again" restarts the same message at once (the other player starts) and keeps one short line with the last winner (or "Draw").
 5. Each game is one small database row, deleted after 2 days. At most 2,000 new games are accepted per day. The picture in the list is `public/xo-thumb.jpg`.

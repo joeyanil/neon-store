@@ -1175,6 +1175,7 @@ async function main() {
     assert.match(shown().text, /<b>X:<\/b> \u2068Alice\u2069 🥇[\s\S]*<b>O:<\/b> \u2068Bob\u2069 🙌/);
     assert.ok(!/wins|draw|Turn|▸|▹/i.test(shown().text), 'no result wording');
     assert.ok(shown().text.startsWith('<b>XO · Game</b>'), 'the title is fully bold');
+    assert.ok(!/Tap any square/.test(iq.results[0].input_message_content.message_text), 'no instruction line at the start');
     assert.ok(shown().text.includes('<b>\u2003\u2003\u2003vs</b>'), 'vs is bold');
     const mk = JSON.stringify(shown().reply_markup);
     assert.ok(mk.includes('xo:r') && !mk.includes('switch_inline_query') && mk.includes('Open Store') && mk.includes('"style":"primary"'));
@@ -1186,7 +1187,7 @@ async function main() {
     assert.match(lastPayload('answerCallbackQuery').text, /Only the two players/);
     await tap(BOB, 'xo:r');
     assert.match(shown().text, /▸ <b>X:<\/b> \u2068Bob\u2069[\s\S]*▹ <b>O:<\/b> \u2068Alice\u2069/);
-    assert.match(shown().text, /<i>Last game: \u2068Alice\u2069 🥇 · \u2068Bob\u2069 🙌<\/i>/);
+    assert.match(shown().text, /<i>\u2068Alice\u2069 🥇<\/i>$/);
     assert.ok(!JSON.stringify(shown().reply_markup).includes('xo:n'), 'the board is playable again');
     await tap(ALICE, 'xo:m:4');
     assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
