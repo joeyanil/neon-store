@@ -1155,12 +1155,12 @@ async function main() {
     const tap = (from, data) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data, inline_message_id: imid } });
     const shown = () => lastPayload('editMessageText', (p) => p.inline_message_id === imid);
     await tap(ALICE, 'xo:s');
-    assert.match(shown().text, /Alice is waiting/);
+    assert.match(shown().text, /X<\/b> Alice\s+vs\s+<b>O<\/b> …/);
     await tap(ALICE, 'xo:j');
     assert.match(lastPayload('answerCallbackQuery').text, /Wait for a friend/);
     await tap(BOB, 'xo:j:o'); // Bob joins and chooses to go first
     assert.match(shown().text, /Alice[\s\S]*Bob/);
-    assert.match(shown().text, /Turn: .*Bob/, 'the person who joined decided to start');
+    assert.match(shown().text, /▸ <b>O<\/b> Bob/, 'the person who joined decided to start');
     await tap(ALICE, 'xo:m:0'); // Bob's turn, not Alice's
     assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
     for (const [u, c] of [[BOB, 3], [ALICE, 0], [BOB, 4], [ALICE, 1]]) await tap(u, `xo:m:${c}`);
@@ -1171,13 +1171,27 @@ async function main() {
     assert.match(lastPayload('answerCallbackQuery').text, /taken/);
     await tap(BOB, 'xo:m:8');
     await tap(ALICE, 'xo:m:2');
-    assert.match(shown().text, /Alice wins/);
+    assert.match(shown().text, /🏆 <b>X<\/b> Alice/);
+    assert.ok(!/wins|draw|Turn/i.test(shown().text), 'no win or loss wording');
     const mk = JSON.stringify(shown().reply_markup);
-    assert.ok(mk.includes('switch_inline_query_current_chat'), 'play again opens a new game below, the result stays');
+    assert.ok(mk.includes('switch_inline_query_current_chat') && mk.includes('again '), 'play again opens a new game below, the result stays');
+    assert.ok(mk.includes('Open Store'));
     assert.ok(mk.includes('t.me/neon_test_bot?start=xo'), 'a button opens the bot');
     assert.ok(!mk.includes('xo:m:'), 'a finished board cannot be played');
     await tap(ALICE, 'xo:s');
     assert.match(lastPayload('answerCallbackQuery').text, /already started/);
+    // play again: a fresh message for the same two players, the finished one stays as it was
+    const code = /again (\d+)/.exec(mk)[1];
+    await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq2', from: BOB, query: `again ${code}`, offset: '' } });
+    const offer = lastPayload('answerInlineQuery').results[0];
+    assert.match(offer.input_message_content.message_text, /X<\/b> Bob\s+vs\s+<b>O<\/b> Alice/);
+    const imid2 = 'inl-2';
+    const again = (from) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data: offer.reply_markup.inline_keyboard[0][0].callback_data, inline_message_id: imid2 } });
+    await again({ id: 111777, first_name: 'Carl' });
+    assert.match(lastPayload('answerCallbackQuery').text, /Only the two players/);
+    await again(BOB);
+    assert.match(lastPayload('editMessageText', (p) => p.inline_message_id === imid2).text, /▸ <b>X<\/b> Bob/);
+    assert.match(shown().text, /🏆 <b>X<\/b> Alice/, 'the first result is still there');
   });
 
   await step('Telegram messages with a wrong or missing secret are refused', async () => {

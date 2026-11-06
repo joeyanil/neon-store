@@ -7,7 +7,6 @@ import { botUsername } from './notify.js';
 const DAILY_CAP = 2000; // new games per 24 hours; a safety net for the free plan
 const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 const MARK = { X: '𝗫', O: '𝗢', '.': '·' }; // bold letters for the squares
-const TAGLINE = '<i>Neon Store: Exchange USDT to ETBirr</i>';
 const OFFER = 'Neon Store: Exchange USDT to ETBirr';
 
 export const nameOf = (u) => String([u.first_name, u.last_name].filter(Boolean).join(' ') || u.username || 'Player').replace(/\s+/g, ' ').trim().slice(0, 20);
@@ -17,41 +16,43 @@ export function winnerOf(board) {
   return board.includes('.') ? null : 'D';
 }
 
-const openApp = (bot) => (bot ? [{ text: '🛍 Open Neon Store', url: `https://t.me/${bot}?start=xo` }] : []);
+const openApp = (bot) => (bot ? [{ text: '🛍 Open Store', url: `https://t.me/${bot}?start=xo` }] : []);
 
 function view(g, bot) {
-  const xn = `<b>X</b> ${esc(g.x_name)}`;
-  const on = g.o_id ? `<b>O</b> ${esc(g.o_name)}` : '<b>O</b> …';
+  const done = g.status === 'done';
+  const mark = (side) => (done ? (g.winner === side ? '🏆 ' : '') : g.status === 'play' && g.turn === side ? '▸ ' : '');
+  const players = `${mark('X')}<b>X</b> ${esc(g.x_name)}  vs  ${mark('O')}<b>O</b> ${g.o_id ? esc(g.o_name) : '…'}`;
+  const text = `<b>XO</b> · Game\n${players}`;
   const app = openApp(bot);
   if (g.status === 'wait') {
-    return {
-      text: `<b>XO</b> · ${xn} is waiting\n${TAGLINE}`,
-      markup: { inline_keyboard: [
-        [{ text: 'Join · I go first', callback_data: 'xo:j:o' }, { text: `Join · ${g.x_name} goes first`, callback_data: 'xo:j:x' }],
-        app] },
-    };
+    return { text, markup: { inline_keyboard: [
+      [{ text: 'Join · I go first', callback_data: 'xo:j:o' }, { text: `Join · ${g.x_name} goes first`, callback_data: 'xo:j:x' }], app] } };
   }
-  let line;
-  if (g.status === 'done') line = g.winner === 'D' ? "It's a draw" : `🏆 ${g.winner === 'X' ? esc(g.x_name) : esc(g.o_name)} wins`;
-  else line = `Turn: ${g.turn === 'X' ? xn : on}`;
-  const rows = [0, 3, 6].map((r) => [0, 1, 2].map((c) => ({ text: MARK[g.board[r + c]], callback_data: g.status === 'done' ? 'xo:n' : `xo:m:${r + c}` })));
+  const rows = [0, 3, 6].map((r) => [0, 1, 2].map((c) => ({ text: MARK[g.board[r + c]], callback_data: done ? 'xo:n' : `xo:m:${r + c}` })));
   const kb = [...rows];
-  if (g.status === 'done') kb.push([{ text: '🔁 Play again', switch_inline_query_current_chat: '' }]); // posts a fresh game below this one
+  if (done) kb.push([{ text: '🔁 Play again', switch_inline_query_current_chat: `again ${g.rid}` }]); // posts a new game below, same two players
   kb.push(app);
-  return { text: `<b>XO</b> · ${xn}  vs  ${on}\n${line}\n${TAGLINE}`, markup: { inline_keyboard: kb.filter((r) => r.length) } };
+  return { text, markup: { inline_keyboard: kb.filter((r) => r.length) } };
 }
 
-/** Someone typed @bot in a chat: offer one game. */
+/** Someone typed @bot in a chat: offer one game (or, after "Play again", a new game for the same two players). */
 export async function handleInlineQuery(env, tg, q) {
   const bot = await botUsername(env, tg, await getSettings(env.DB));
+  const again = /^again (\d{1,12})$/.exec(String(q.query || '').trim());
+  let old = null;
+  if (again) old = await env.DB.prepare("SELECT rowid AS rid, * FROM games WHERE rowid = ? AND status = 'done'").bind(Number(again[1])).first();
+  const ok = old && (q.from.id === old.x_id || q.from.id === old.o_id);
+  const text = ok
+    ? `<b>XO</b> · Game\n<b>X</b> ${esc(old.o_name)}  vs  <b>O</b> ${esc(old.x_name)}`
+    : `<b>XO</b> · Game\ntap Play to start`;
   await tg.answerInlineQuery(q.id, [{
-    type: 'article', id: `xo${Date.now().toString(36)}`, title: 'XO', description: OFFER,
-    input_message_content: { message_text: `<b>XO</b> · tap Play to start\n${TAGLINE}`, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
-    reply_markup: { inline_keyboard: [[{ text: '▶️ Play', callback_data: 'xo:s' }], openApp(bot)] },
+    type: 'article', id: `xo${Date.now().toString(36)}`, title: ok ? 'XO · play again' : 'XO', description: OFFER,
+    input_message_content: { message_text: text, parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
+    reply_markup: { inline_keyboard: [[{ text: '▶️ Play', callback_data: ok ? `xo:p:${old.rid}` : 'xo:s' }], openApp(bot)] },
   }]);
 }
 
-const getGame = (db, id) => db.prepare('SELECT * FROM games WHERE id = ?').bind(id).first();
+const getGame = (db, id) => db.prepare('SELECT rowid AS rid, * FROM games WHERE id = ?').bind(id).first();
 
 /** A button on a game message. Returns quickly and touches only the games table. */
 export async function handleGameCallback(env, tg, cb) {
@@ -64,6 +65,15 @@ export async function handleGameCallback(env, tg, cb) {
   const [, act, arg] = String(cb.data || '').split(':');
   let g = await getGame(env.DB, id);
 
+  if (act === 'p') { // "Play again": a new message below the old one, same two players, sides swapped so the other person starts
+    if (g) return say('This game already started.');
+    const old = await env.DB.prepare("SELECT * FROM games WHERE rowid = ? AND status = 'done'").bind(Number(arg)).first();
+    if (!old) return say('That game is no longer available. Start a new one.', true);
+    if (me.id !== old.x_id && me.id !== old.o_id) return say('Only the two players can play again.', true);
+    await env.DB.prepare("INSERT OR IGNORE INTO games (id, x_id, x_name, o_id, o_name, status, turn, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'play', 'X', ?, ?)").bind(id, old.o_id, old.o_name, old.x_id, old.x_name, now, now).run();
+    await say();
+    return show(await getGame(env.DB, id));
+  }
   if (act === 's') {
     if (g) return say('This game already started.');
     const recent = await env.DB.prepare('SELECT COUNT(*) n FROM games WHERE created_at > ?').bind(now - 86400).first();
