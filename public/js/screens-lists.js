@@ -1,5 +1,5 @@
 import { api, serverNow } from './api.js';
-import { emptyState, langPill, orderCard, S, topBar } from './components.js';
+import { emptyState, themeToggle, orderCard, S, topBar } from './components.js';
 import { errorText, formatAgo, formatWhen, t } from './i18n.js';
 import { etbForUsdt, parseUsdt } from './money.js';
 import { haptic } from './tg.js';
@@ -49,7 +49,7 @@ export function ordersScreen(ctx) {
     }
   }
 
-  const root = h('div', { class: 'screen' }, topBar({ title: t('orders_title'), right: langPill(ctx.toggleLang) }), seg, listBox);
+  const root = h('div', { class: 'screen' }, topBar({ title: t('orders_title'), right: themeToggle() }), seg, listBox);
   load(true);
   return { el: root, refresh: () => load(true), destroy: () => { dead = true; } };
 }
@@ -77,7 +77,7 @@ export function ratesScreen(ctx) {
     h('div', { class: 'tiny' }, t('per_usdt')));
 
   const root = h('div', { class: 'screen' },
-    topBar({ title: t('rates_title'), sub: t('rates_sub'), right: langPill(ctx.toggleLang) }),
+    topBar({ title: t('rates_title'), sub: t('rates_sub'), right: themeToggle() }),
     r.ready ? null : h('div', { class: 'notice' }, icon('info', 20), t('rates_not_ready')),
     h('div', { class: 'pillows' }, rateCard('buy', 'buy'), rateCard('sell', 'sell')),
     h('section', { class: 'clay stack' },

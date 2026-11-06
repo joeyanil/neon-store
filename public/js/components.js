@@ -32,8 +32,17 @@ export function emptyState({ iconName, title, body, action }) {
 }
 
 /** The shop is English only for now, so there is nothing to switch. */
-export function langPill() {
-  return null;
+/** A small sun/moon button for switching between light and dark. The app listens for the event and does the switching. */
+export function themeToggle() {
+  const dark = () => document.documentElement.dataset.theme === 'dark';
+  const btn = h('button', { type: 'button', class: 'themebtn' });
+  const paint = () => {
+    btn.replaceChildren(icon(dark() ? 'sun' : 'moon', 18));
+    btn.setAttribute('aria-label', dark() ? 'Switch to light mode' : 'Switch to dark mode');
+  };
+  btn.addEventListener('click', () => { document.dispatchEvent(new CustomEvent('neon-theme-toggle')); paint(); });
+  paint();
+  return btn;
 }
 
 export function topBar({ title, sub, right }) {

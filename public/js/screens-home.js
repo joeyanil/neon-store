@@ -1,5 +1,5 @@
 import { api, serverNow } from './api.js';
-import { emptyState, langPill, orderCard, S } from './components.js';
+import { emptyState, themeToggle, orderCard, S } from './components.js';
 import { formatAgo, t } from './i18n.js';
 import { PLATFORMS } from './platforms.js';
 import { haptic, openTelegramLink, user } from './tg.js';
@@ -47,7 +47,7 @@ export function homeScreen(ctx) {
       h('div', { class: 'grow' },
         h('h1', { class: 'hello' }, t('hello', { name })),
         h('p', { class: 'sub muted' }, t('hello_sub'))),
-      langPill(ctx.toggleLang)),
+      themeToggle()),
     boot.rates.paused ? h('div', { class: 'notice warn', role: 'status' }, icon('alert', 20), t('paused_banner'))
       : !boot.rates.ready ? h('div', { class: 'notice', role: 'status' }, icon('info', 20), t('rates_not_ready'))
       : !boot.availability.buy && !boot.availability.sell && !boot.availability.service ? h('div', { class: 'notice', role: 'status' }, icon('info', 20), t('shop_not_open')) : null,

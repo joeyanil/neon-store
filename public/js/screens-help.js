@@ -1,6 +1,6 @@
 // Help: the hub (tickets, rules, settings), new ticket, ticket thread, policies.
 import { api, fetchImage } from './api.js';
-import { S, topBar, langPill } from './components.js';
+import { S, topBar, themeToggle } from './components.js';
 import { flowTop, listRow, textArea } from './form.js';
 import { errorText, formatWhen, getLang, t } from './i18n.js';
 import { haptic, setActions } from './tg.js';
@@ -29,7 +29,7 @@ export function helpScreen(ctx) {
       } }, t('allow')));
 
   const root = h('div', { class: 'screen' },
-    topBar({ title: t('help_title'), sub: t('help_sub'), right: langPill(ctx.toggleLang) }),
+    topBar({ title: t('help_title'), sub: t('help_sub'), right: themeToggle() }),
     h('section', { class: 'clay stack' },
       h('button', { class: 'btn primary block', type: 'button', onclick: () => { haptic.press(); ctx.go('/ticket/new'); } }, icon('ticket', 20), t('new_ticket')),
       name ? h('button', { class: 'btn block', type: 'button', onclick: () => ctx.openChat(`https://t.me/${name}`) }, icon('support', 20), t('chat_support')) : null,

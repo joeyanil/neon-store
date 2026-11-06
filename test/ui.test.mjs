@@ -290,12 +290,25 @@ async function main() {
   });
   await page.close();
   page = await newPage({ scheme: 'dark' });
-  await step('dark mode renders with readable text', async () => {
+  await step('the app opens light even when Telegram is dark; one small button switches to dark and it is remembered', async () => {
     await page.locator('.pillow.buy').waitFor();
-    await page.waitForTimeout(500);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light', 'light by default');
+    const btn = page.locator('.themebtn').first();
+    const box = await btn.boundingBox();
+    assert.ok(box.width <= 40 && box.height <= 40, 'the button is small');
+    assert.match(await btn.getAttribute('aria-label'), /dark mode/);
+    await btn.click();
+    await page.waitForTimeout(400);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     await shot(page, '62-home-dark');
     const [fg, bg] = await page.evaluate(() => [getComputedStyle(document.body).color, getComputedStyle(document.body).backgroundColor]);
     console.log('  >', fg, bg);
+    await page.reload();
+    await page.locator('.pillow.buy').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'the choice is kept');
+    assert.match(await page.locator('.themebtn').first().getAttribute('aria-label'), /light mode/);
+    await page.locator('.themebtn').first().click();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
   });
   await page.close();
   void cat;

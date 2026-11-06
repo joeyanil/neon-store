@@ -171,6 +171,8 @@ svg { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .iconbtn { width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; background: var(--bg); box-shadow: var(--raise-sm); color: var(--accent-text); flex: none; }
 .iconbtn:active { box-shadow: var(--pressed); }
+.themebtn { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: var(--bg); box-shadow: var(--raise-sm); color: var(--accent-text); flex: none; }
+.themebtn:active { box-shadow: var(--pressed); }
 .iconbtn.ok { color: var(--buy); }
 
 /* ---------- the two pillows (home) ---------- */

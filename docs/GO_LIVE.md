@@ -28,7 +28,7 @@
 8. The legal side of selling USDT and taking bank transfers where the shop operates is the owner's responsibility; get local advice.
 
 ## Switching from the test shop to the friend's live shop
-1. Remove the test data: delete the `wrangler d1 execute ... demo-data.sql` part from `ship` in package.json, run `scripts/clear-demo.sql` once, then enter the real data in the app.
+1. Remove the test data: delete the `wrangler d1 execute ... demo-data.sql` part from `ship` in package.json, run `scripts/clear-demo.sql` once (it clears the fake payment accounts and networks only; the social media services are real and stay), then enter the real accounts in the app.
 2. Friend creates his own bot in BotFather and a Cloudflare account; set `ADMIN_IDS` in wrangler.toml to his Telegram id and `SUPPORT_USERNAME`; add his bot token as the secret `BOT_TOKEN`; open `/connect` once.
 3. He presses Start in the bot once with his account so receipts can be stored in his chat.
 4. Delete the GitHub token used for testing; `/revoke` the test bot token in BotFather.

@@ -81,7 +81,7 @@ const ctx = {
   updateNav: () => paintNav(),
   setLang: async (lang) => { await applyLang(lang); api.setLanguage(lang).catch(() => {}); },
   toggleLang: () => ctx.setLang(S.lang === 'en' ? 'am' : 'en'),
-  setTheme: (pref) => { S.themePref = pref; TG.prefs.set('neon.theme', pref); TG.applyTheme(pref); },
+  setTheme: (pref) => { S.themePref = pref; TG.prefs.set('neon.theme', pref); try { localStorage.setItem('neon_theme', pref); } catch { /* private mode */ } TG.applyTheme(pref); },
   openChat: (url) => TG.openTelegramLink(url),
   requestMessages: async () => { const ok = await TG.requestWriteAccess(); if (ok) { S.boot.user.can_dm = true; api.markCanDm().catch(() => {}); } return ok; },
   openIds: new Set(),
@@ -210,7 +210,8 @@ addEventListener('neon:shop-changed', async () => {
 
 async function main() {
   TG.init();
-  S.themePref = (await TG.prefs.get('neon.theme')) || 'auto';
+  S.themePref = (await TG.prefs.get('neon.theme')) || 'light'; // light until the person chooses otherwise
+  document.addEventListener('neon-theme-toggle', () => ctx.setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
   TG.applyTheme(S.themePref);
   TG.onThemeChanged(() => { if (S.themePref === 'auto') TG.applyTheme('auto'); });
   TG.watchKeyboard();

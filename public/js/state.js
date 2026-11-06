@@ -2,7 +2,7 @@
 export const S = {
   boot: null,           // response of /api/bootstrap
   lang: 'en',
-  themePref: 'auto',    // 'auto' | 'light' | 'dark'
+  themePref: 'light',    // 'auto' | 'light' | 'dark'
   activeCount: 0,       // open orders, shown as a badge on the Orders tab
   drafts: { buy: {}, sell: {} },
 };

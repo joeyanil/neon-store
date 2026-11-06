@@ -1,6 +1,6 @@
 // Admin: the order queue, order review (proofs, what to check, what to release), tickets inbox.
 import { admin, ApiError, fetchImage, serverNow } from './api.js';
-import { S, langPill, topBar } from './components.js';
+import { S, themeToggle, topBar } from './components.js';
 import { countBubble, flowTop, listRow, textArea, textField } from './form.js';
 import { errorText, formatAgo, formatWhen, t } from './i18n.js';
 import { confirmDialog, haptic, openTelegramLink, setActions } from './tg.js';
@@ -127,7 +127,7 @@ export function adminHomeScreen(ctx) {
     }
   }
   const root = h('div', { class: 'screen' },
-    topBar({ title: 'Dashboard', sub: isOwner ? 'Owner · full access' : 'Support · orders and tickets', right: langPill(ctx.toggleLang) }),
+    topBar({ title: 'Dashboard', sub: isOwner ? 'Owner · full access' : 'Support · orders and tickets', right: themeToggle() }),
     banner, tileBox, statsBox,
     h('h2', { class: 'section-title' }, 'Orders'), searchBox, tabs, list, links);
   loadSummary(); load(true);
