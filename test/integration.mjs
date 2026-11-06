@@ -1145,53 +1145,58 @@ async function main() {
     assert.ok(sm.storage.bytes > 0 && sm.storage.limit === 500 * 1024 * 1024, 'the storage meter has a size');
   });
   console.log('\nXO game');
-  await step('XO game: inline offer, joiner picks who starts, win, play again below, open-bot button, full-game rules', async () => {
+  await step('XO game: picker with image, starts on first tap, no Play step, second tapper is O, win marks, play again below, open-store button', async () => {
     await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq1', from: ALICE, query: '', offset: '' } });
     const iq = lastPayload('answerInlineQuery');
     assert.equal(iq.cache_time, 0);
     assert.equal(iq.results[0].title, 'XO');
-    assert.match(iq.results[0].description, /Exchange USDT to ETBirr/);
+    assert.ok(/\/xo-thumb\.jpg$/.test(iq.results[0].thumbnail_url), 'the picker has an image');
+    assert.equal((await fetch(iq.results[0].thumbnail_url)).headers.get('content-type'), 'image/jpeg');
+    const kb0 = iq.results[0].reply_markup.inline_keyboard;
+    assert.equal(kb0.length, 4, 'a 3x3 board and the store button, no Play step');
+    assert.ok(kb0[3][0].url.includes('t.me/neon_test_bot?start=xo') && kb0[3][0].text === '🛍 Open Store');
     const imid = 'inl-1';
-    const tap = (from, data) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data, inline_message_id: imid } });
-    const shown = () => lastPayload('editMessageText', (p) => p.inline_message_id === imid);
-    await tap(ALICE, 'xo:s');
-    assert.match(shown().text, /X<\/b> Alice\s+vs\s+<b>O<\/b> …/);
-    await tap(ALICE, 'xo:j');
-    assert.match(lastPayload('answerCallbackQuery').text, /Wait for a friend/);
-    await tap(BOB, 'xo:j:o'); // Bob joins and chooses to go first
-    assert.match(shown().text, /Alice[\s\S]*Bob/);
-    assert.match(shown().text, /▸ <b>O<\/b> Bob/, 'the person who joined decided to start');
-    await tap(ALICE, 'xo:m:0'); // Bob's turn, not Alice's
+    const tap = (from, data, id = imid) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data, inline_message_id: id } });
+    const shown = (id = imid) => lastPayload('editMessageText', (p) => p.inline_message_id === id);
+    await tap(ALICE, 'xo:m:0'); // Alice taps first: she is X and plays that square
+    assert.match(shown().text, /▹ <b>X<\/b> Alice[\s\S]*▸ <b>O<\/b> …/);
+    assert.equal(shown().reply_markup.inline_keyboard[0][0].text, '𝗫');
+    await tap(ALICE, 'xo:m:1');
+    assert.match(lastPayload('answerCallbackQuery').text, /Waiting for a friend/);
+    await tap(BOB, 'xo:m:3'); // Bob taps: he is O
+    assert.match(shown().text, /▸ <b>X<\/b> Alice[\s\S]*▹ <b>O<\/b> Bob/);
+    await tap(BOB, 'xo:m:4');
     assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
-    for (const [u, c] of [[BOB, 3], [ALICE, 0], [BOB, 4], [ALICE, 1]]) await tap(u, `xo:m:${c}`);
-    const third = { id: 111777, first_name: 'Carl' };
-    await tap(third, 'xo:m:8');
+    await tap({ id: 111777, first_name: 'Carl' }, 'xo:m:8');
     assert.match(lastPayload('answerCallbackQuery').text, /two players/);
-    await tap(BOB, 'xo:m:3');
+    await tap(ALICE, 'xo:m:3');
     assert.match(lastPayload('answerCallbackQuery').text, /taken/);
-    await tap(BOB, 'xo:m:8');
-    await tap(ALICE, 'xo:m:2');
-    assert.match(shown().text, /🏆 <b>X<\/b> Alice/);
-    assert.ok(!/wins|draw|Turn/i.test(shown().text), 'no win or loss wording');
+    for (const [u, c] of [[ALICE, 1], [BOB, 4], [ALICE, 2]]) await tap(u, `xo:m:${c}`);
+    assert.match(shown().text, /<b>X<\/b> Alice 🥇[\s\S]*<b>O<\/b> Bob 🙌/);
+    assert.ok(!/wins|draw|Turn|▸|▹/i.test(shown().text), 'no result wording');
     const mk = JSON.stringify(shown().reply_markup);
-    assert.ok(mk.includes('switch_inline_query_current_chat') && mk.includes('again '), 'play again opens a new game below, the result stays');
-    assert.ok(mk.includes('Open Store'));
-    assert.ok(mk.includes('t.me/neon_test_bot?start=xo'), 'a button opens the bot');
+    assert.ok(mk.includes('again ') && mk.includes('switch_inline_query_current_chat') && mk.includes('Open Store'));
     assert.ok(!mk.includes('xo:m:'), 'a finished board cannot be played');
-    await tap(ALICE, 'xo:s');
-    assert.match(lastPayload('answerCallbackQuery').text, /already started/);
+    await tap(ALICE, 'xo:n');
+    assert.match(lastPayload('answerCallbackQuery').text, /over/);
     // play again: a fresh message for the same two players, the finished one stays as it was
     const code = /again (\d+)/.exec(mk)[1];
     await webhook({ update_id: nextUpdateId(), inline_query: { id: 'iq2', from: BOB, query: `again ${code}`, offset: '' } });
     const offer = lastPayload('answerInlineQuery').results[0];
-    assert.match(offer.input_message_content.message_text, /X<\/b> Bob\s+vs\s+<b>O<\/b> Alice/);
-    const imid2 = 'inl-2';
-    const again = (from) => webhook({ update_id: nextUpdateId(), callback_query: { id: `g${nextUpdateId()}`, from, data: offer.reply_markup.inline_keyboard[0][0].callback_data, inline_message_id: imid2 } });
-    await again({ id: 111777, first_name: 'Carl' });
+    assert.match(offer.input_message_content.message_text, /▸ <b>X<\/b> Bob[\s\S]*▹ <b>O<\/b> Alice/);
+    const cell = offer.reply_markup.inline_keyboard[1][1].callback_data;
+    await tap({ id: 111777, first_name: 'Carl' }, cell, 'inl-2');
     assert.match(lastPayload('answerCallbackQuery').text, /Only the two players/);
-    await again(BOB);
-    assert.match(lastPayload('editMessageText', (p) => p.inline_message_id === imid2).text, /▸ <b>X<\/b> Bob/);
-    assert.match(shown().text, /🏆 <b>X<\/b> Alice/, 'the first result is still there');
+    await tap(ALICE, cell, 'inl-2');
+    assert.match(lastPayload('answerCallbackQuery').text, /Not your turn/);
+    await tap(BOB, cell, 'inl-2');
+    assert.match(shown('inl-2').text, /▹ <b>X<\/b> Bob[\s\S]*▸ <b>O<\/b> Alice/);
+    assert.match(shown().text, /Alice 🥇/, 'the first result is still there');
+    // a draw
+    const d = 'inl-3';
+    await tap(ALICE, 'xo:m:0', d);
+    for (const [u, c] of [[BOB, 1], [ALICE, 2], [BOB, 4], [ALICE, 3], [BOB, 5], [ALICE, 7], [BOB, 6], [ALICE, 8]]) await tap(u, `xo:m:${c}`, d);
+    assert.ok(shown(d).text.includes('🤝'), 'a draw shows a handshake on both lines');
   });
 
   await step('Telegram messages with a wrong or missing secret are refused', async () => {
