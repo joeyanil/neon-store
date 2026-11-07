@@ -143,10 +143,13 @@ const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8B
 export const PNG_BYTES = Uint8Array.from(atob(PNG_B64), (c) => c.charCodeAt(0));
 /** A valid PNG. Pass a number to get a different file (so its hash differs) that is still a valid PNG. */
 export const png = (variant = 0) => new Blob([PNG_BYTES, new Uint8Array(variant)], { type: 'image/png' });
+let shotCounter = 0;
+/** A proof form. A screenshot is required, so one is added unless photo is false; each default one differs a little so it is not mistaken for a reused image. */
 export const evidenceForm = ({ text, photo } = {}) => {
   const f = new FormData();
   if (text !== undefined) f.append('text', text);
-  if (photo) f.append('photo', photo, 'receipt.png');
+  const pic = photo === false ? null : photo || png(100 + ++shotCounter);
+  if (pic) f.append('photo', pic, 'receipt.png');
   return f;
 };
 

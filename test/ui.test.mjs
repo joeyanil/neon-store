@@ -103,6 +103,10 @@ async function main() {
   await step('customer adds a receipt and sends it', async () => {
     orderId = (await page.locator('header h1').first().innerText()).trim();
     assert.match(orderId, /^NG-/);
+    await page.locator('input[type=text]').first().fill('TXN-ALONE-1'); // a transaction number alone is not enough
+    await page.waitForTimeout(300);
+    assert.equal((await mainBtn(page)).is_active, false, 'sending is blocked until a screenshot is added');
+    assert.ok((await body(page)).includes('required'), 'the screenshot is marked as required');
     await page.locator('input[type=file]').first().setInputFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: Buffer.from(PNG_BYTES) });
     await page.waitForTimeout(400);
     await pressMain(page);
@@ -154,7 +158,8 @@ async function main() {
   });
   await step('admin confirms payment, then releases with a reference', async () => {
     await pressMain(page);
-    await waitText(page, 'Transaction hash', 8000);
+    await waitText(page, 'Reference for the customer', 8000);
+    assert.ok((await body(page)).includes('leave this empty'), 'the reference is optional');
     assert.equal((await mainBtn(page)).text, 'Mark as released');
     await page.locator('input').last().fill('0xabc123tx');
     await pressMain(page);

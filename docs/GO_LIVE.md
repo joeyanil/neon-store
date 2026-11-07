@@ -51,3 +51,8 @@
 Open the admin Dashboard and tap the storage meter, or open the link in the reminder message. It shows the live database size, what is stored, how long records are kept, and a **Download a copy** card that sends a CSV file with every order detail to the owner's private chat with the bot. Fourteen days before finished orders are deleted, the bot sends each owner a reminder (at most once a week, and not right after a download). Support staff never see this screen.
 
 `DEVELOPER_IDS` in `wrangler.toml` lists people who get the label "Developer" instead of "Owner" on the Team screen. They have exactly the same full access.
+
+## Payment rules
+
+- **A screenshot is required** for every payment proof (buying, selling and services), in the app and in the bot chat. A transaction number alone is refused. Typing the number as well is optional. After the first proof, a customer may add more with text only.
+- **The reference is optional when you release.** The owner or staff can just tap "Mark as released". If they type a reference or hash, the customer sees it.

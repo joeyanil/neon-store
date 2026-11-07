@@ -54,11 +54,6 @@ export async function handleAdmin(request, env, tg, { user, role, path }) {
     }
     if (action && method === 'POST') {
       const b = await body();
-      if (action === 'release') {
-        const ref = String(b.reference ?? '').trim();
-        const kind = (await db.prepare('SELECT side FROM orders WHERE id = ?').bind(id).first())?.side;
-        if (kind !== 'service' && ref.length < 3) throw new ApiError(400, 'invalid_field', 'Enter the transaction hash or bank reference so the customer can check it (at least 3 characters).', { field: 'reference' });
-      }
       const res = await adminAct(env, tg, user.id, id, action, { reference: b.reference, reason: b.reason });
       const detail = await adminOrderDetail(db, id);
       return json({ applied: res.ok, message: res.message, ...detail, server_time: nowSec() }, res.ok ? 200 : 409);

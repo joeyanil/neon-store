@@ -203,7 +203,7 @@ export function adminOrderScreen(ctx) {
     if (o.status === 'evidence_submitted' || o.status === 'awaiting_payment' || o.status === 'expired' || o.status === 'processing') {
       const parts = [];
       if (o.status === 'processing') {
-        refField = textField({ label: o.side === 'service' ? 'Note for the customer (optional)' : o.side === 'buy' ? 'Transaction hash / Bybit reference' : 'Bank or Telebirr reference', placeholder: o.side === 'service' ? 'Optional' : 'Required: the customer sees this', hint: o.side === 'service' ? '' : 'Paste it from your app so the customer can check it.' });
+        refField = textField({ label: 'Reference for the customer (optional)', placeholder: 'Optional', hint: o.side === 'service' ? '' : 'You can leave this empty and just mark it as released.' });
         parts.push(refField.el);
       }
       if (rejecting) {
@@ -284,7 +284,6 @@ export function adminOrderScreen(ctx) {
   }
   async function doRelease() {
     const ref = refField?.get() || '';
-    if (detail.order.side !== 'service' && ref.length < 3) { refField?.error('Enter the transaction hash or bank reference first.'); haptic.error(); return; }
     if (!(await confirmDialog(detail.order.side === 'service' ? 'Mark this service as delivered?' : 'Have you really sent the money? The customer is told right now.'))) return;
     await run(() => admin.act(id, 'release', { reference: ref }));
   }

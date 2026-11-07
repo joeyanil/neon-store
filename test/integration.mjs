@@ -232,8 +232,12 @@ async function main() {
     assert.equal((await api(ALICE, 'GET', '/api/orders/NOT-AN-ID')).status, 404);
   });
   await step('proof needs something to show, and only real images are accepted (the file is checked, not its label)', async () => {
-    const none = await api(ALICE, 'POST', `/api/orders/${buy.id}/evidence`, evidenceForm({}));
-    assert.equal(none.body.error.code, 'no_evidence');
+    const none = await api(ALICE, 'POST', `/api/orders/${buy.id}/evidence`, evidenceForm({ photo: false }));
+    assert.equal(none.body.error.code, 'screenshot_required', 'the screenshot is a must');
+    const textOnly = await api(ALICE, 'POST', `/api/orders/${buy.id}/evidence`, evidenceForm({ text: 'TXN-ONLY-TEXT', photo: false }));
+    assert.equal(textOnly.status, 400, 'a transaction number alone is not enough');
+    assert.equal(textOnly.body.error.code, 'screenshot_required');
+    assert.equal((await api(ALICE, 'GET', `/api/orders/${buy.id}`)).body.order.evidence_count, 0, 'nothing was saved');
     const text = new Blob(['not an image'], { type: 'text/plain' });
     assert.equal((await api(ALICE, 'POST', `/api/orders/${buy.id}/evidence`, evidenceForm({ photo: text }))).body.error.code, 'bad_photo');
     const lying = new Blob(['<script>alert(1)</script>'], { type: 'image/png' });
@@ -336,11 +340,7 @@ async function main() {
     assert.equal(r.body.applied, false);
     assert.equal(takeCalls('sendMessage', (p) => p.chat_id === ALICE.id).length, before);
   });
-  await step('releasing needs a reference, then completes the order and sends it to the customer', async () => {
-    const none = await api(ADMIN, 'POST', `/api/admin/orders/${buy.id}/release`, {});
-    assert.equal(none.status, 400);
-    assert.equal(none.body.error.field, 'reference');
-    assert.equal((await api(ADMIN, 'POST', `/api/admin/orders/${buy.id}/release`, { reference: 'ab' })).status, 400);
+  await step('releasing completes the order and sends it to the customer; a reference is optional and shown when given', async () => {
     const r = await api(ADMIN, 'POST', `/api/admin/orders/${buy.id}/release`, { reference: 'TXID-ABC-999' });
     assert.equal(r.status, 200);
     assert.equal(r.body.order.status, 'completed');
@@ -403,10 +403,12 @@ async function main() {
     assert.equal(sell.pay.net_kind, 'tron');
     assert.equal(sell.payout_name, 'Bob Tesfaye');
   });
-  await step('a sell proof can be a transaction hash alone; the alert tells the admin whom to pay', async () => {
+  await step('a sell proof needs a screenshot too (the hash is a bonus); the alert tells the admin whom to pay', async () => {
+    const hashOnly = await api(BOB, 'POST', `/api/orders/${sell.id}/evidence`, evidenceForm({ text: 'tx hash 0xabc123', photo: false }));
+    assert.equal(hashOnly.body.error.code, 'screenshot_required');
     const r = await api(BOB, 'POST', `/api/orders/${sell.id}/evidence`, evidenceForm({ text: 'tx hash 0xabc123' }));
     assert.equal(r.body.order.status, 'evidence_submitted');
-    assert.equal(r.body.order.proofs[0].has_image, false);
+    assert.equal(r.body.order.proofs[0].has_image, true);
     const msg = lastPayload('sendMessage', (p) => String(p.text || '').includes(sell.id) && p.chat_id === ADMIN_CHAT);
     assert.ok(msg.text.includes('tx hash 0xabc123'));
     assert.ok(msg.text.includes('Pay birr to'));
@@ -732,8 +734,11 @@ async function main() {
     const usdtOrder = await api(ALICE, 'POST', '/api/orders', sBuy(9, '10', { idem: 'idem-ref-req-001' }));
     await api(ALICE, 'POST', `/api/orders/${usdtOrder.body.order.id}/evidence`, evidenceForm({ text: 'TXN-REFREQ' }));
     await api(ADMIN, 'POST', `/api/admin/orders/${usdtOrder.body.order.id}/confirm`, {});
-    assert.equal((await api(ADMIN, 'POST', `/api/admin/orders/${usdtOrder.body.order.id}/release`, {})).body.error.field, 'reference'); // USDT still needs a hash
-    await api(ADMIN, 'POST', `/api/admin/orders/${usdtOrder.body.order.id}/reject`, { reason: 'other' });
+    const bare = await api(ADMIN, 'POST', `/api/admin/orders/${usdtOrder.body.order.id}/release`, {}); // no reference typed: just mark it as released
+    assert.equal(bare.status, 200, JSON.stringify(bare.body));
+    assert.equal(bare.body.order.status, 'completed');
+    assert.equal(bare.body.order.completion_ref, null);
+    assert.ok(!/Reference:/.test(dmTo(ALICE.id).text), 'no reference line when none was given');
   });
   await step('services can be switched off and are protected once used', async () => {
     assert.equal((await api(ADMIN, 'DELETE', `/api/admin/services/${svc}`)).status, 409);
@@ -846,7 +851,11 @@ async function main() {
   });
   await step('sending proof in chat: a photo with a caption reaches the admins and the vault', async () => {
     await tap(ALICE, `c:op:${chatBuy}`);
-    assert.match(screenOf(ALICE).text, /receipt/i);
+    assert.match(screenOf(ALICE).text, /screenshot of your payment.*required/is);
+    await say(ALICE, 'TXN-TEXT-ONLY'); // a transaction number alone is not accepted
+    assert.match(screenOf(ALICE).text, /screenshot of your payment is required/i);
+    assert.equal((await api(ALICE, 'GET', `/api/orders/${chatBuy}`)).body.order.evidence_count, 0, 'nothing saved without a screenshot');
+    await tap(ALICE, `c:op:${chatBuy}`);
     await say(ALICE, undefined, { photo: [{ file_id: 'small' }, { file_id: 'large' }], caption: 'TXN-CHAT-1' });
     assert.match(screenOf(ALICE).text, /Received for/);
     const o = (await api(ALICE, 'GET', `/api/orders/${chatBuy}`)).body.order;

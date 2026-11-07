@@ -113,7 +113,9 @@ export async function submitEvidence(env, tg, userId, orderId, { text, photo }) 
 
   const note = cleanNote(text);
   const hasPhoto = Boolean(photo) && typeof photo.arrayBuffer === 'function' && photo.size > 0;
-  if (!note && !hasPhoto) throw new ApiError(400, 'no_evidence', row.side === 'buy' ? 'Attach your payment receipt.' : 'Add the transaction ID or a screenshot.');
+  // The first proof must include a screenshot, whatever else is typed. Later additions to the same order may be text only.
+  if (!hasPhoto && row.status !== 'evidence_submitted') throw new ApiError(400, 'screenshot_required', 'A screenshot of your payment is required. Add one and send again.', { field: 'photo' });
+  if (!note && !hasPhoto) throw new ApiError(400, 'no_evidence', 'Add a screenshot or the transaction number.');
 
   const image = hasPhoto ? await storeImage(env, orderId, photo) : null; // validates the real file type and size
   let proofId;

@@ -237,15 +237,17 @@ export function orderScreen(ctx) {
 
   // ----- actions -----
   const lateOk = () => order && order.status === 'expired' && serverNow() < order.expires_at + 86400;
+  // The first proof needs a screenshot. Later additions to the same order may be text only.
+  const ready = () => Boolean(file) || (order?.status === 'evidence_submitted' && Boolean(text.trim()));
   const canSend = () => order && (order.status === 'awaiting_payment' || (order.status === 'evidence_submitted' && showMore) || lateOk());
   function syncActions() {
     if (!canSend()) return setActions(null);
     const expired = order.status === 'awaiting_payment' && serverNow() >= order.expires_at;
-    setActions({ text: t('send_receipt'), loading: busy, disabled: expired || !(text.trim() || file), onClick: send });
+    setActions({ text: t('send_receipt'), loading: busy, disabled: expired || !ready(), onClick: send });
   }
 
   async function send() {
-    if (busy || !canSend() || !(text.trim() || file)) return;
+    if (busy || !canSend() || !ready()) return;
     busy = true; syncActions();
     const form = new FormData();
     if (text.trim()) form.append('text', text.trim());
