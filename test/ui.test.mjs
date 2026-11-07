@@ -127,6 +127,23 @@ async function main() {
     await page.waitForTimeout(700);
     await shot(page, '17b-admin-dashboard');
   });
+  await step('owner opens Storage from the meter: live size, what is stored, deletion rule, download a copy', async () => {
+    await page.locator('.storage-link').click();
+    await waitText(page, 'Database size');
+    for (const w of ['Plenty of room', 'What is stored', 'Receipt photos', 'When records are deleted', 'Download a copy', 'Change how long records are kept']) await waitText(page, w);
+    assert.ok(/\d+(\.\d)? (KB|MB)/.test(await body(page)), 'a real size is shown');
+    await page.getByRole('button', { name: /All orders/ }).click();
+    await waitText(page, 'to your chat with the bot');
+    await waitText(page, 'Last copy sent');
+    await shot(page, '63-admin-storage');
+    await page.getByText('Change how long records are kept').click();
+    await waitText(page, 'Keep order records for');
+  });
+  await page.close();
+  page = await newPage({ user: ADMIN, url: '/?s=storage' });
+  await step('the reminder link opens Storage directly', async () => {
+    await waitText(page, 'Download a copy', 10000);
+  });
   await page.close();
   page = await newPage({ user: ADMIN, url: `/?a=${orderId}` });
   await step('deep link opens the admin order review', async () => {
@@ -306,6 +323,10 @@ async function main() {
     await page.reload();
     await page.locator('.pillow.buy').waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'the choice is kept');
+    await page.evaluate(() => localStorage.clear()); // the phone wipes the page's own storage: Telegram's storage must still remember
+    await page.reload();
+    await page.locator('.pillow.buy').waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'the choice survives cleared browser storage');
     assert.match(await page.locator('.themebtn').first().getAttribute('aria-label'), /light mode/);
     await page.locator('.themebtn').first().click();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');

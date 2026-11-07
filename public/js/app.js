@@ -6,6 +6,7 @@ import { errorText, setLang, t } from './i18n.js';
 import { homeScreen } from './screens-home.js';
 import { adminHomeScreen, adminOrderScreen, adminTicketScreen, adminTicketsScreen } from './screens-admin.js';
 import * as AS from './screens-admin-settings.js';
+import { storageScreen } from './screens-admin-storage.js';
 import { helpScreen, policiesScreen, ticketNewScreen, ticketScreen } from './screens-help.js';
 import { ordersScreen, ratesScreen } from './screens-lists.js';
 import { serviceScreen, servicesScreen } from './screens-service.js';
@@ -41,6 +42,7 @@ const ROUTES = [
   { re: /^\/admin\/tickets$/, screen: adminTicketsScreen },
   { re: /^\/admin\/ticket\/(TK-[2-9A-HJKMNP-Z]{6})$/, screen: adminTicketScreen, params: (m) => ({ id: m[1] }) },
   { re: /^\/admin\/settings$/, screen: AS.settingsHubScreen },
+  { re: /^\/admin\/storage$/, screen: storageScreen },
   { re: /^\/admin\/setup$/, screen: AS.setupScreen },
   { re: /^\/admin\/rates$/, screen: AS.ratesSettingsScreen },
   { re: /^\/admin\/methods$/, screen: AS.methodsListScreen },
@@ -81,7 +83,7 @@ const ctx = {
   updateNav: () => paintNav(),
   setLang: async (lang) => { await applyLang(lang); api.setLanguage(lang).catch(() => {}); },
   toggleLang: () => ctx.setLang(S.lang === 'en' ? 'am' : 'en'),
-  setTheme: (pref) => { S.themePref = pref; TG.prefs.set('neon.theme', pref); try { localStorage.setItem('neon_theme', pref); } catch { /* private mode */ } TG.applyTheme(pref); },
+  setTheme: (pref) => { S.themePref = pref; TG.prefs.set('neon.theme', pref); TG.applyTheme(pref); },
   openChat: (url) => TG.openTelegramLink(url),
   requestMessages: async () => { const ok = await TG.requestWriteAccess(); if (ok) { S.boot.user.can_dm = true; api.markCanDm().catch(() => {}); } return ok; },
   openIds: new Set(),
@@ -194,6 +196,7 @@ function deepLink() {
     const k = pick('k', 'k', TICKET);
     if (k) return `/admin/ticket/${k}`;
   }
+  if (S.boot.role === 'owner' && (q.get('s') === 'storage' || sp === 's_storage')) return '/admin/storage';
   return null;
 }
 

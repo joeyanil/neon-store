@@ -477,4 +477,8 @@ html.no-fg .backrow > svg { margin-right: 6px; }
 .meter { height: 10px; border-radius: 999px; background: var(--bg); box-shadow: var(--inset); overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--buy-a), var(--buy-b)); }
 .meter.warn i { background: linear-gradient(90deg, #f2a93b, #c9780a); }
+.storage-link { text-align: left; width: 100%; padding: 4px 0; background: none; color: inherit; }
+.warn-text { color: var(--warn); font-weight: 600; }
+.big-figure { font-family: var(--font-display); font-weight: 700; font-size: 38px; letter-spacing: -.02em; line-height: 1.1; }
+.block-hint { display: block; }
 .meter.bad i { background: linear-gradient(90deg, var(--sell-a), var(--sell-b)); }

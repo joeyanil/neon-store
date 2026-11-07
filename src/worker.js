@@ -5,6 +5,7 @@ import { json } from './http.js';
 import { VERSION } from './version.js';
 import { purgeOldProofs } from './proofs.js';
 import { checkStorage, purgeOldData } from './retention.js';
+import { remindExport } from './storage.js';
 import { expireStaleOrders, handleUpdate, retryAlerts } from './service.js';
 import { Telegram } from './telegram.js';
 
@@ -69,6 +70,7 @@ export default {
     const gone = await purgeOldData(env, now).catch((err) => { console.warn('purgeOldData failed', String(err?.message || err)); return null; });
     if (gone && (gone.orders || gone.tickets || gone.logs)) console.log(`deleted ${gone.orders} order(s), ${gone.tickets} ticket(s), ${gone.logs} log row(s)`);
     await env.DB.prepare('DELETE FROM games WHERE created_at < ?').bind(now - 2 * 86400).run().catch(() => {});
+    await remindExport(env, tg, now).catch((err) => console.warn('remindExport failed', String(err?.message || err)));
     await checkStorage(env, tg, now).catch((err) => console.warn('checkStorage failed', String(err?.message || err)));
   },
 };

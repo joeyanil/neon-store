@@ -29,6 +29,8 @@ crons = ["*/5 * * * *"]
 # WEBAPP_URL = "https://shop.example.com"
 # Telegram numeric ids of the OWNERS (comma separated). Owners can do everything. They can add staff inside the app.
 ADMIN_IDS = "5356910725,8373718510"
+# Same full access as an owner; the Team screen shows this person as "Developer" instead of "Owner".
+DEVELOPER_IDS = "5356910725"
 # Optional. Normally leave this out: alerts go to each admin privately, or to a group after an owner sends /alerts there.
 # ADMIN_CHAT_ID = "-100123456789"
 # Public support username shown in the app, without @.

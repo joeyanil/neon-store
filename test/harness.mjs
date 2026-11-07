@@ -50,6 +50,7 @@ const fakeTelegram = createServer(async (req, res) => {
   if (ct.includes('multipart/form-data')) {
     const form = await new Response(raw, { headers: { 'content-type': ct } }).formData();
     payload = Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === 'string' ? v : `[file ${v.name} ${v.size}b ${v.type}]`]));
+    for (const v of form.values()) if (typeof v !== 'string' && /csv/.test(v.type)) payload.fileText = await v.text();
     if (payload.reply_markup) payload.reply_markup = JSON.parse(payload.reply_markup);
   } else {
     payload = JSON.parse(raw.toString() || '{}');
@@ -186,7 +187,7 @@ export async function startStack({ extraVars = [], beforeDemo = '', demoData = f
   }
   if (demoData) runDemoSql();
   console.log('Starting Worker…');
-  const vars = { BOT_TOKEN, ADMIN_IDS: String(ADMIN.id), ADMIN_CHAT_ID: String(ADMIN_CHAT), WEBAPP_URL: APP, TELEGRAM_API_BASE: `http://127.0.0.1:${TG_PORT}`, SUPPORT_USERNAME: 'Neon_ghost147' };
+  const vars = { BOT_TOKEN, ADMIN_IDS: String(ADMIN.id), DEVELOPER_IDS: String(ADMIN.id), ADMIN_CHAT_ID: String(ADMIN_CHAT), WEBAPP_URL: APP, TELEGRAM_API_BASE: `http://127.0.0.1:${TG_PORT}`, SUPPORT_USERNAME: 'Neon_ghost147' };
   const args = ['wrangler', 'dev', '--local', '--port', '8787', '--persist-to', persist, '--test-scheduled'];
   for (const [k, v] of Object.entries(vars)) args.push('--var', `${k}:${v}`);
   for (const v of extraVars) args.push('--var', v);

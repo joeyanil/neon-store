@@ -2,6 +2,7 @@
 // No Telegram calls here (see service.js for those).
 import { chatOf, parseRef } from './channels.js';
 import { DB_LIMIT_BYTES } from './retention.js';
+import { expiring, liveSize } from './storage.js';
 import { ApiError } from './http.js';
 import { formatEtb, parseRate, parseUsdt } from './money.js';
 import {
@@ -13,6 +14,11 @@ import { cleanAccount, cleanAddress, cleanLabel, cleanName, cleanNote, METHOD_KI
 // ---------- who is an admin ----------
 
 const ownerIds = (env) => new Set(String(env.ADMIN_IDS || '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0));
+
+const developerIds = (env) => new Set(String(env.DEVELOPER_IDS || '').split(',').map((x) => Number(x.trim())).filter((n) => Number.isSafeInteger(n) && n > 0));
+
+/** Every owner id from ADMIN_IDS. */
+export const ownerIdList = (env) => [...ownerIds(env)];
 
 /** The first owner in ADMIN_IDS, or 0. */
 export const firstOwnerId = (env) => [...ownerIds(env)][0] || 0;
@@ -321,7 +327,8 @@ export async function listTeam(env) {
     for (const u of results) names[u.id] = { first_name: u.first_name, username: u.username };
   }
   return {
-    owners: owners.map((id) => ({ id, ...(names[id] || {}) })),
+    // Developers have the same full access as owners; the title only says who they are. The shop's owner is listed first.
+    owners: owners.map((id) => ({ id, title: developerIds(env).has(id) ? 'Developer' : 'Owner', ...(names[id] || {}) })).sort((a, b) => (a.title === 'Owner' ? 0 : 1) - (b.title === 'Owner' ? 0 : 1)),
     staff: staff.map((s) => ({ id: s.id, name: s.name, created_at: s.created_at, ...(names[s.id] || {}) })),
   };
 }
@@ -362,7 +369,7 @@ export async function adminSummary(db) {
     counts: { review: n.evidence_submitted || 0, release: n.processing || 0, waiting: n.awaiting_payment || 0, tickets: tickets.n },
     last_24h: { completed: day.orders, usdt_micro: day.usdt },
     reviews: { count: rv.n, average: rv.n ? Math.round(rv.avg * 10) / 10 : null },
-    storage: { bytes: cfg.db_bytes, limit: DB_LIMIT_BYTES, keep_days: cfg.data_retention_days },
+    storage: { bytes: await liveSize(db, cfg.db_bytes), limit: DB_LIMIT_BYTES, keep_days: cfg.data_retention_days, expiring: (await expiring(db, cfg.data_retention_days, nowSec())).count },
     rate_updated_at: s.rate_updated_at,
     paused: s.paused,
   };

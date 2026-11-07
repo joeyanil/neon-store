@@ -76,6 +76,8 @@ export async function fetchImage(path) {
 /** Everything under /api/admin. Owners can use all of it; staff only the queue, tickets and customers. */
 export const admin = {
   summary: () => request('GET', '/api/admin/summary'),
+  storage: () => request('GET', '/api/admin/storage'),
+  exportOrders: (scope) => request('POST', '/api/admin/export', { json: { scope } }),
   orders: (filter, before = null, q = '') => request('GET', `/api/admin/orders?filter=${filter}${before ? `&before=${before}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
   order: (id) => request('GET', `/api/admin/orders/${id}`),
   act: (id, action, json = {}) => request('POST', `/api/admin/orders/${id}/${action}`, { json }),

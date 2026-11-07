@@ -315,7 +315,7 @@ export function teamScreen(ctx) {
   const nameField = textField({ label: 'Name (optional)', maxLength: 40 });
   const listBox = h('div', { class: 'stack' }, ...skeletons(70));
   const person = (p, owner) => h('div', { class: 'clay tight row' }, h('div', { class: 'grow' }, h('div', { class: 'strong' }, p.first_name || p.name || p.id), h('div', { class: 'tiny' }, `${p.username ? `@${p.username} · ` : ''}ID ${p.id}`)),
-    owner ? h('span', { class: 'pill ok' }, 'Owner') : h('button', { class: 'btn small danger', type: 'button', onclick: async () => {
+    owner ? h('span', { class: 'pill ok' }, p.title || 'Owner') : h('button', { class: 'btn small danger', type: 'button', onclick: async () => {
       if (!(await confirmDialog('Remove this person from the team?'))) return;
       try { paint(await admin.removeStaff(p.id)); toast('Removed', 'ok'); } catch (err) { toast(errorText(err), 'error'); }
     } }, 'Remove'));
@@ -323,7 +323,7 @@ export function teamScreen(ctx) {
   admin.team().then(paint).catch((err) => listBox.replaceChildren(h('div', { class: 'notice warn' }, errorText(err))));
   const can = (ok, text) => h('div', { class: 'check-item' + (ok ? ' done' : '') }, h('span', { class: 'tick' }, ok ? icon('check', 16) : null), h('span', { class: ok ? '' : 'muted' }, text));
   root.append(card(title('Who can do what'),
-    h('div', { class: 'stack' }, h('div', { class: 'strong' }, 'Owner'), can(true, 'Everything below, plus shop settings, rates, accounts, services, channels, team and the activity log'),
+    h('div', { class: 'stack' }, h('div', { class: 'strong' }, 'Owner and developer'), can(true, 'Everything below, plus shop settings, rates, accounts, services, channels, team and the activity log'),
       can(true, 'Block and unblock customers')),
     h('div', { class: 'stack' }, h('div', { class: 'strong' }, 'Support staff'), can(true, 'See the order queue and every order, with receipts and transaction numbers'), can(true, 'Confirm payments, mark orders released, reject orders'),
       can(true, 'Answer support tickets'), can(false, 'Change rates, accounts, services or settings'), can(false, 'Add team members or block customers'), can(false, 'Leave customer reviews (nobody on the team can)'))),

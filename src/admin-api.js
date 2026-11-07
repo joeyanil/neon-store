@@ -8,6 +8,7 @@ import { ApiError, json, readJson } from './http.js';
 import { getSettings, nowSec, setSetting } from './orders.js';
 import { alertTargets } from './notify.js';
 import { adminAct } from './service.js';
+import { sendExport, storageReport } from './storage.js';
 import { createPolicy, createService, deletePolicy, deleteService, listPolicies, listServicesAdmin, updatePolicy, updateService } from './shop-admin.js';
 import { adminClose, adminListTickets, adminReply, adminTicketDetail, isTicketId, ticketPhoto } from './tickets.js';
 import { isOrderId } from './validate.js';
@@ -136,6 +137,9 @@ export async function handleAdmin(request, env, tg, { user, role, path }) {
 
   if (rest === 'button-emoji' && method === 'GET') { needOwner(role); return json({ items: knownEmojis(), map: await loadMap(db) }); }
   if (rest === 'button-emoji' && method === 'PUT') { needOwner(role); const b = await body(); return json({ map: await saveMap(db, user.id, b.map) }); }
+
+  if (rest === 'storage' && method === 'GET') return json(await storageReport(env));
+  if (rest === 'export' && method === 'POST') return json(await sendExport(env, tg, user.id, (await body()).scope));
 
   if (rest === 'audit' && method === 'GET') return json({ entries: await listAudit(db) });
 

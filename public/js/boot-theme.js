@@ -2,7 +2,7 @@
 (function () {
   // Light by default. A person's own choice (saved on this phone) wins; "auto" follows Telegram.
   var pref = 'light';
-  try { pref = localStorage.getItem('neon_theme') || 'light'; } catch (e) { /* no storage */ }
+  try { pref = localStorage.getItem('neon.theme') || 'light'; } catch (e) { /* no storage */ }
   var wa = window.Telegram && window.Telegram.WebApp;
   var system = wa && wa.colorScheme ? wa.colorScheme === 'dark' : window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
   var dark = pref === 'dark' || (pref === 'auto' && system);

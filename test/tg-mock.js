@@ -24,6 +24,8 @@
     initDataUnsafe: { user: params.user, auth_date: Math.floor(Date.now() / 1000) },
     version: '9.6', platform: 'android', colorScheme: params.scheme || 'light', themeParams: {},
     isVersionAtLeast: () => true,
+    // Telegram's own storage survives even when the page's localStorage is wiped; sessionStorage stands in for it here.
+    DeviceStorage: { getItem(k, cb) { cb(null, sessionStorage.getItem('tgmock:' + k)); }, setItem(k, v, cb) { sessionStorage.setItem('tgmock:' + k, v); if (cb) cb(null, true); } },
     ready() {}, expand() {}, close() { state.closed = true; },
     setHeaderColor(c) { state.header = c; }, setBackgroundColor(c) { state.background = c; }, setBottomBarColor(c) { state.bottomBar = c; },
     enableClosingConfirmation() { state.closing = true; }, disableClosingConfirmation() { state.closing = false; },

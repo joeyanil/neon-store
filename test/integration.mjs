@@ -1128,6 +1128,40 @@ async function main() {
     assert.equal((await api(STAFF, 'PUT', '/api/admin/settings', { paused: true })).status, 403);
     assert.equal((await api(STAFF, 'GET', '/api/admin/audit')).status, 403);
   });
+  console.log('\nStorage screen, reminder and CSV copy');
+  await step('storage: owners only, live size, 14-day reminder once a week, CSV copy with every detail', async () => {
+    const team = (await api(ADMIN, 'GET', '/api/admin/team')).body;
+    assert.equal(team.owners[0].title, 'Developer', 'the developer is labelled, with the same full access');
+    assert.equal((await api(STAFF, 'GET', '/api/admin/storage')).status, 403, 'support staff cannot open Storage');
+    assert.equal((await api(STAFF, 'POST', '/api/admin/export', { scope: 'all' })).status, 403, 'support staff cannot download');
+    const st = (await api(ADMIN, 'GET', '/api/admin/storage')).body;
+    assert.ok(st.bytes > 0 && st.limit === 500 * 1024 * 1024 && st.keep_days === 120 && st.warn_days === 14);
+    assert.ok(st.counts.orders >= 1 && st.counts.customers >= 2 && st.expiring.count === 0 && st.last_export_at === null);
+    const sm = (await api(STAFF, 'GET', '/api/admin/summary')).body;
+    assert.ok(sm.storage.bytes > 0 && typeof sm.storage.expiring === 'number');
+    // 110 days later the oldest finished orders are inside the 14-day warning window (but not deleted yet)
+    await scheduledAt(Date.now() + 110 * 86400 * 1000);
+    const reminder = takeCalls('sendMessage', (p) => /Old orders will be deleted soon/.test(p.text || ''));
+    assert.equal(reminder.length, 1, 'one owner is reminded');
+    assert.equal(reminder[0].payload.chat_id, ADMIN.id);
+    assert.match(reminder[0].payload.reply_markup.inline_keyboard[0][0].web_app.url, /\?s=storage$/);
+    assert.ok(!takeCalls('sendMessage', (p) => p.chat_id === STAFF.id && /Old orders/.test(p.text || '')).length, 'staff are not told');
+    await scheduledAt(Date.now() + 110 * 86400 * 1000 + 600_000);
+    assert.equal(takeCalls('sendMessage', (p) => /Old orders will be deleted soon/.test(p.text || '')).length, 1, 'not again within a week');
+    // the copy
+    assert.equal((await api(ADMIN, 'POST', '/api/admin/export', { scope: 'nope' })).status, 400);
+    assert.equal((await api(ADMIN, 'POST', '/api/admin/export', { scope: 'expiring' })).status, 409, 'nothing is old enough yet by the real clock');
+    const ex = await api(ADMIN, 'POST', '/api/admin/export', { scope: 'all' });
+    assert.equal(ex.status, 200, JSON.stringify(ex.body));
+    assert.ok(ex.body.sent >= 3 && ex.body.files === 1);
+    const doc = lastPayload('sendDocument', (p) => /neon-orders-all-/.test(p.document));
+    assert.equal(doc.chat_id, String(ADMIN.id), 'the file goes to the owner\'s own chat');
+    const csv = doc.fileText;
+    assert.ok(/^\uFEFF?Order,Created \(Addis Ababa\)/.test(csv), 'the header row is there');
+    for (const word of ['Transaction numbers typed', 'Payout account', 'Completion reference', 'Stars', 'TXN-FB-1', 'alice']) assert.ok(csv.includes(word), word);
+    assert.equal((await api(ADMIN, 'GET', '/api/admin/storage')).body.last_export_at > 0, true, 'the last copy is remembered');
+    assert.ok((await api(ADMIN, 'GET', '/api/admin/audit')).body.entries.some((e) => e.action === 'export_orders'), 'the download is in the activity log');
+  });
   await step('retention: old finished records are deleted, open ones stay, review average and storage meter survive', async () => {
     assert.equal((await api(ADMIN, 'PUT', '/api/admin/settings', { data_retention_days: 10 })).status, 400, 'too short is refused');
     assert.equal((await api(ADMIN, 'PUT', '/api/admin/settings', { data_retention_days: 120 })).status, 200);

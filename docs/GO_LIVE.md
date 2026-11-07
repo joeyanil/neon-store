@@ -45,3 +45,9 @@
 3. In any chat type `@YourBot` and a space, then tap "XO". The board appears at once. The first person to tap a square plays X, the next different person plays O.
 4. When a game ends, "Play again" restarts the same message at once (the other player starts) and keeps one short line with the last winner (or "Draw").
 5. Each game is one small database row, deleted after 2 days. At most 2,000 new games are accepted per day. The picture in the list is `public/xo-thumb.jpg`.
+
+## Storage screen (owners only)
+
+Open the admin Dashboard and tap the storage meter, or open the link in the reminder message. It shows the live database size, what is stored, how long records are kept, and a **Download a copy** card that sends a CSV file with every order detail to the owner's private chat with the bot. Fourteen days before finished orders are deleted, the bot sends each owner a reminder (at most once a week, and not right after a download). Support staff never see this screen.
+
+`DEVELOPER_IDS` in `wrangler.toml` lists people who get the label "Developer" instead of "Owner" on the Team screen. They have exactly the same full access.

@@ -208,23 +208,26 @@ const mem = new Map();
 // so every read has a short deadline: a missing answer must never keep the app from opening.
 const safeKey = (k) => String(k).replace(/[^A-Za-z0-9_-]/g, '_');
 export const prefs = {
-  get(key) {
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(mem.get(key) ?? null), 1200);
-      const done = (v) => { clearTimeout(timer); resolve(v); };
+  /** Looks in this phone's browser storage first (instant), then Telegram's device storage, then Telegram's cloud storage (which also survives a reinstall). */
+  async get(key) {
+    const sk = safeKey(key);
+    const ask = (store, minVersion) => new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), 1200);
       try {
-        if (tg && atLeast('9.0') && tg.DeviceStorage) return tg.DeviceStorage.getItem(safeKey(key), (err, v) => done(err ? mem.get(key) ?? null : v ?? null));
-        done(localStorage.getItem(key));
-      } catch {
-        done(mem.get(key) ?? null);
-      }
+        if (tg && atLeast(minVersion) && tg[store]) return tg[store].getItem(sk, (err, v) => { clearTimeout(timer); resolve(err || !v ? null : v); });
+      } catch { /* fall through */ }
+      clearTimeout(timer);
+      resolve(null);
     });
+    try { const v = localStorage.getItem(key); if (v) return v; } catch { /* no browser storage */ }
+    return (await ask('DeviceStorage', '9.0')) || (await ask('CloudStorage', '6.9')) || mem.get(key) || null;
   },
+  /** Saves in every place that works, so one that is cleared or unsupported does not lose the choice. */
   set(key, value) {
     mem.set(key, value);
-    try {
-      if (tg && atLeast('9.0') && tg.DeviceStorage) tg.DeviceStorage.setItem(safeKey(key), value);
-      else localStorage.setItem(key, value);
-    } catch { /* storage unavailable: the in-memory value still works for this session */ }
+    const sk = safeKey(key);
+    try { localStorage.setItem(key, value); } catch { /* no browser storage */ }
+    try { if (tg && atLeast('9.0') && tg.DeviceStorage) tg.DeviceStorage.setItem(sk, value); } catch { /* unsupported */ }
+    try { if (tg && atLeast('6.9') && tg.CloudStorage) tg.CloudStorage.setItem(sk, value); } catch { /* unsupported */ }
   },
 };
